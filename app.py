@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import re
 import sqlite3
-import uuid
 from io import BytesIO
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,7 +18,7 @@ from streamlit.errors import StreamlitSecretNotFoundError
 import streamlit.components.v1 as components
 
 
-APP_VERSION_LABEL = "PHIMA v0.3.3 — Admin Database Dashboard"
+APP_VERSION_LABEL = "P.H.I.M.A. v0.3.4"
 DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
@@ -98,6 +97,42 @@ REPORT_TEMPLATES: dict[str, ReportTemplate] = {
 }
 
 DEFAULT_TEMPLATE_KEY = "adult"
+
+CLINICAL_CATEGORY_BY_TEMPLATE_LABEL = {
+    "Dewasa — Panoramik Umum": "Adult Panoramic",
+    "Anak — Mixed Dentition": "Pediatric Mixed Dentition",
+    "Ortodonti — Panoramik Ortho": "Orthodontic Panoramic",
+    "Impaksi — Fokus M3": "Third Molar Impaction",
+    "TMJ — Fokus Sendi": "TMJ Assessment",
+}
+
+CLINICAL_CATEGORY_BY_TEMPLATE_KEY = {
+    "adult": "Adult Panoramic",
+    "pediatric": "Pediatric Mixed Dentition",
+    "ortho": "Orthodontic Panoramic",
+    "impaction": "Third Molar Impaction",
+    "tmj": "TMJ Assessment",
+}
+
+
+def map_clinical_category(report_template: str | None = None, template_key: str | None = None) -> str:
+    """Map PHIMA report template metadata to a normalized clinical category."""
+
+    if template_key and template_key in CLINICAL_CATEGORY_BY_TEMPLATE_KEY:
+        return CLINICAL_CATEGORY_BY_TEMPLATE_KEY[template_key]
+    template_label = (report_template or "").strip()
+    if template_label in CLINICAL_CATEGORY_BY_TEMPLATE_LABEL:
+        return CLINICAL_CATEGORY_BY_TEMPLATE_LABEL[template_label]
+    lowered = template_label.lower()
+    if "anak" in lowered or "mixed dentition" in lowered or "pediatric" in lowered:
+        return "Pediatric Mixed Dentition"
+    if "ortho" in lowered:
+        return "Orthodontic Panoramic"
+    if "impaksi" in lowered or "impaction" in lowered:
+        return "Third Molar Impaction"
+    if "tmj" in lowered or "sendi" in lowered:
+        return "TMJ Assessment"
+    return "Adult Panoramic"
 
 
 @dataclass(frozen=True)
@@ -252,7 +287,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.3.3 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.4 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -368,6 +403,7 @@ def init_cases_table() -> None:
                 updated_at TEXT NOT NULL,
                 user_name TEXT,
                 report_template TEXT,
+                clinical_category TEXT,
                 stage_1_findings TEXT,
                 stage_2_findings TEXT,
                 stage_3_findings TEXT,
@@ -386,6 +422,7 @@ def init_cases_table() -> None:
             "updated_at": "TEXT",
             "user_name": "TEXT",
             "report_template": "TEXT",
+            "clinical_category": "TEXT",
             "stage_1_findings": "TEXT",
             "stage_2_findings": "TEXT",
             "stage_3_findings": "TEXT",
@@ -398,6 +435,26 @@ def init_cases_table() -> None:
         for column, definition in required_columns.items():
             if column not in existing_columns and column != "case_id":
                 connection.execute(f"ALTER TABLE cases ADD COLUMN {column} {definition}")
+        connection.execute(
+            """
+            UPDATE cases
+               SET clinical_category = CASE
+                   WHEN report_template = 'Dewasa — Panoramik Umum' THEN 'Adult Panoramic'
+                   WHEN report_template = 'Anak — Mixed Dentition' THEN 'Pediatric Mixed Dentition'
+                   WHEN report_template = 'Ortodonti — Panoramik Ortho' THEN 'Orthodontic Panoramic'
+                   WHEN report_template = 'Impaksi — Fokus M3' THEN 'Third Molar Impaction'
+                   WHEN report_template = 'TMJ — Fokus Sendi' THEN 'TMJ Assessment'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%anak%' THEN 'Pediatric Mixed Dentition'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%pediatric%' THEN 'Pediatric Mixed Dentition'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%ortho%' THEN 'Orthodontic Panoramic'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%impaksi%' THEN 'Third Molar Impaction'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%impaction%' THEN 'Third Molar Impaction'
+                   WHEN lower(COALESCE(report_template, '')) LIKE '%tmj%' THEN 'TMJ Assessment'
+                   ELSE 'Adult Panoramic'
+               END
+             WHERE clinical_category IS NULL OR clinical_category = ''
+            """
+        )
 
 
 
@@ -415,7 +472,7 @@ def fetch_cases(search_query: str = "", limit: int | None = None) -> list[sqlite
 
     init_cases_table()
     sql = """
-        SELECT case_id, created_at, updated_at, user_name, report_template,
+        SELECT case_id, created_at, updated_at, user_name, report_template, clinical_category,
                stage_1_findings, stage_2_findings, stage_3_findings, generated_ai_report,
                final_corrected_report, radiodiagnosis, notes, report_status
         FROM cases
@@ -427,10 +484,11 @@ def fetch_cases(search_query: str = "", limit: int | None = None) -> list[sqlite
             WHERE user_name LIKE ?
                OR radiodiagnosis LIKE ?
                OR report_template LIKE ?
+               OR clinical_category LIKE ?
                OR created_at LIKE ?
                OR updated_at LIKE ?
         """
-        params.extend([pattern, pattern, pattern, pattern, pattern])
+        params.extend([pattern, pattern, pattern, pattern, pattern, pattern])
     sql += " ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC"
     if limit is not None:
         sql += " LIMIT ?"
@@ -462,29 +520,29 @@ def get_database_overview() -> dict[str, str | int]:
         diagnosis = (case["radiodiagnosis"] or "").strip()
         if diagnosis:
             diagnosis_counts[diagnosis] = diagnosis_counts.get(diagnosis, 0) + 1
-        template = (case["report_template"] or "").lower()
-        if "anak" in template or "pediatric" in template:
+        category = case["clinical_category"] or map_clinical_category(case["report_template"])
+        if category == "Pediatric Mixed Dentition":
             template_counts["pediatric"] += 1
-        elif "ortho" in template:
+        elif category == "Orthodontic Panoramic":
             template_counts["orthodontic"] += 1
-        elif "impaksi" in template or "impaction" in template:
+        elif category == "Third Molar Impaction":
             template_counts["impaction"] += 1
-        elif "tmj" in template:
+        elif category == "TMJ Assessment":
             template_counts["tmj"] += 1
         else:
             template_counts["adult"] += 1
     most_common = max(diagnosis_counts.items(), key=lambda item: item[1])[0] if diagnosis_counts else "Belum ada data"
     most_recent = all_cases[0]["updated_at"] if all_cases else "Belum ada data"
     return {
-        "Total Cases Saved": len(all_cases),
-        "Total Cases Today": count_cases_where("date(created_at) = ?", (today_prefix,)),
-        "Total Adult Cases": template_counts["adult"],
-        "Total Pediatric Cases": template_counts["pediatric"],
-        "Total Orthodontic Cases": template_counts["orthodontic"],
-        "Total Impaction Cases": template_counts["impaction"],
-        "Total TMJ Cases": template_counts["tmj"],
-        "Most Recent Saved Case": most_recent,
-        "Most Common Radiodiagnosis": most_common,
+        "Total Kasus Tersimpan": len(all_cases),
+        "Total Kasus Hari Ini": count_cases_where("date(created_at) = ?", (today_prefix,)),
+        "Total Kasus Adult Panoramic": template_counts["adult"],
+        "Total Kasus Pediatric Mixed Dentition": template_counts["pediatric"],
+        "Total Kasus Orthodontic Panoramic": template_counts["orthodontic"],
+        "Total Kasus Third Molar Impaction": template_counts["impaction"],
+        "Total Kasus TMJ Assessment": template_counts["tmj"],
+        "Kasus Tersimpan Terbaru": most_recent,
+        "Radiodiagnosis Tersering": most_common,
     }
 
 
@@ -497,7 +555,7 @@ def cases_to_csv(cases: list[sqlite3.Row]) -> bytes:
     output = StringIO()
     fieldnames = list(cases[0].keys()) if cases else [
         "case_id", "created_at", "updated_at", "user_name", "report_template",
-        "stage_1_findings", "stage_2_findings", "stage_3_findings", "generated_ai_report",
+        "clinical_category", "stage_1_findings", "stage_2_findings", "stage_3_findings", "generated_ai_report",
         "final_corrected_report", "radiodiagnosis", "notes", "report_status",
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -515,7 +573,7 @@ def cases_to_excel(cases: list[sqlite3.Row]) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "PHIMA Cases"
-    headers = list(cases[0].keys()) if cases else ["case_id", "created_at", "updated_at", "user_name", "report_template", "radiodiagnosis", "report_status"]
+    headers = list(cases[0].keys()) if cases else ["case_id", "created_at", "updated_at", "user_name", "report_template", "clinical_category", "radiodiagnosis", "report_status"]
     sheet.append(headers)
     for case in cases:
         sheet.append([case[header] for header in headers])
@@ -530,6 +588,28 @@ def delete_case(case_id: str) -> None:
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.execute("DELETE FROM cases WHERE case_id = ?", (case_id,))
 
+
+def generate_case_id(now: datetime | None = None) -> str:
+    """Generate a date-scoped PHIMA case id while keeping legacy ids readable."""
+
+    current = now or datetime.now(timezone.utc)
+    date_token = current.strftime("%Y%m%d")
+    prefix = f"PHIMA-{date_token}-"
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        existing_ids = [
+            row[0]
+            for row in connection.execute(
+                "SELECT case_id FROM cases WHERE case_id LIKE ?",
+                (f"{prefix}%",),
+            )
+        ]
+    next_number = 1
+    for existing_id in existing_ids:
+        suffix = existing_id.removeprefix(prefix)
+        if suffix.isdigit():
+            next_number = max(next_number, int(suffix) + 1)
+    return f"{prefix}{next_number:04d}"
+
 def save_case_to_database() -> bool:
     """Insert or update the current case when the final corrected report is ready."""
 
@@ -540,14 +620,17 @@ def save_case_to_database() -> bool:
 
     init_cases_table()
     now = utc_timestamp()
-    case_id = st.session_state.setdefault("case_id", str(uuid.uuid4()))
+    case_id = st.session_state.setdefault("case_id", generate_case_id())
     created_at = st.session_state.setdefault("case_created_at", now)
+    selected_template_key = st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY)
+    selected_template_label = REPORT_TEMPLATES.get(selected_template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY]).label
     payload = {
         "case_id": case_id,
         "created_at": created_at,
         "updated_at": now,
         "user_name": st.session_state.get("user_name", ""),
-        "report_template": REPORT_TEMPLATES.get(st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY), REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY]).label,
+        "report_template": selected_template_label,
+        "clinical_category": map_clinical_category(selected_template_label, selected_template_key),
         "stage_1_findings": st.session_state.get("stage_1", ""),
         "stage_2_findings": st.session_state.get("stage_2", ""),
         "stage_3_findings": st.session_state.get("stage_3", ""),
@@ -561,11 +644,11 @@ def save_case_to_database() -> bool:
         connection.execute(
             """
             INSERT INTO cases (
-                case_id, created_at, updated_at, user_name, report_template,
+                case_id, created_at, updated_at, user_name, report_template, clinical_category,
                 stage_1_findings, stage_2_findings, stage_3_findings, generated_ai_report,
                 final_corrected_report, radiodiagnosis, notes, report_status
             ) VALUES (
-                :case_id, :created_at, :updated_at, :user_name, :report_template,
+                :case_id, :created_at, :updated_at, :user_name, :report_template, :clinical_category,
                 :stage_1_findings, :stage_2_findings, :stage_3_findings, :generated_ai_report,
                 :final_corrected_report, :radiodiagnosis, :notes, :report_status
             )
@@ -573,6 +656,7 @@ def save_case_to_database() -> bool:
                 updated_at=excluded.updated_at,
                 user_name=excluded.user_name,
                 report_template=excluded.report_template,
+                clinical_category=excluded.clinical_category,
                 stage_1_findings=excluded.stage_1_findings,
                 stage_2_findings=excluded.stage_2_findings,
                 stage_3_findings=excluded.stage_3_findings,
@@ -594,6 +678,10 @@ def render_admin_database_dashboard() -> None:
     """Render the authenticated database dashboard and management tools."""
 
     st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">=== DATABASE OVERVIEW ===</span><span class="phima-stage-title">ADMIN DATABASE DASHBOARD</span></h2>', unsafe_allow_html=True)
+    st.warning(
+        "Catatan: Database SQLite pada Streamlit Community Cloud bersifat sementara dan tidak disarankan sebagai penyimpanan permanen jangka panjang. "
+        "Lakukan backup berkala melalui tombol unduh SQLite/CSV/Excel."
+    )
     overview = get_database_overview()
     metric_columns = st.columns(3)
     for index, (label, value) in enumerate(overview.items()):
@@ -601,7 +689,7 @@ def render_admin_database_dashboard() -> None:
     st.markdown('<div class="phima-card"><strong>==========================</strong></div>', unsafe_allow_html=True)
 
     all_cases = fetch_cases(limit=None)
-    st.subheader("Export")
+    st.subheader("Ekspor")
     export_col_1, export_col_2, export_col_3 = st.columns(3)
     with export_col_1:
         if DATABASE_PATH.exists():
@@ -623,14 +711,15 @@ def render_admin_database_dashboard() -> None:
             type="primary",
         )
 
-    st.subheader("Case Table — latest 50 cases")
-    search_query = st.text_input("Search database", placeholder="Search doctor name, radiodiagnosis, template, or date", key="admin_case_search")
+    st.subheader("Tabel Kasus — 50 kasus terbaru")
+    search_query = st.text_input("Cari database", placeholder="Cari nama dokter, radiodiagnosis, template, kategori klinis, atau tanggal", key="admin_case_search")
     latest_cases = fetch_cases(search_query=search_query, limit=50)
     table_rows = [
         {
             "Date": case["created_at"],
             "Nama Dokter": case["user_name"],
             "Template": case["report_template"],
+            "Kategori Klinis": case["clinical_category"],
             "Radiodiagnosis": case["radiodiagnosis"],
             "Status": case["report_status"],
         }
@@ -653,6 +742,7 @@ def render_admin_database_dashboard() -> None:
             st.text(case["final_corrected_report"] or "-")
             st.markdown("**Notes**")
             st.text(case["notes"] or "-")
+            st.markdown(f"**Kategori Klinis:** {case['clinical_category'] or '-'}")
             st.markdown(f"**Timestamp:** {case['updated_at']}")
             confirm = st.checkbox("Saya yakin ingin menghapus kasus ini", key=f"confirm_delete_{case['case_id']}")
             if st.button("🗑 Hapus Kasus", key=f"delete_{case['case_id']}", disabled=not confirm):
@@ -660,27 +750,27 @@ def render_admin_database_dashboard() -> None:
                 st.success("Kasus telah dihapus.")
                 st.rerun()
 
-    st.subheader("Statistics")
+    st.subheader("Statistik")
     template_counts = {label: 0 for label in ["Adult", "Pediatric", "Orthodontic", "Impaction", "TMJ"]}
     diagnosis_counts: dict[str, int] = {}
     for case in all_cases:
-        template = (case["report_template"] or "").lower()
-        if "anak" in template or "pediatric" in template:
+        category = case["clinical_category"] or map_clinical_category(case["report_template"])
+        if category == "Pediatric Mixed Dentition":
             template_counts["Pediatric"] += 1
-        elif "ortho" in template:
+        elif category == "Orthodontic Panoramic":
             template_counts["Orthodontic"] += 1
-        elif "impaksi" in template or "impaction" in template:
+        elif category == "Third Molar Impaction":
             template_counts["Impaction"] += 1
-        elif "tmj" in template:
+        elif category == "TMJ Assessment":
             template_counts["TMJ"] += 1
         else:
             template_counts["Adult"] += 1
         diagnosis = (case["radiodiagnosis"] or "").strip()
         if diagnosis:
             diagnosis_counts[diagnosis] = diagnosis_counts.get(diagnosis, 0) + 1
-    st.markdown("**Cases per template**")
+    st.markdown("**Jumlah kasus per kategori klinis**")
     st.bar_chart(template_counts)
-    st.markdown("**Top 10 most common radiodiagnosis**")
+    st.markdown("**10 radiodiagnosis paling sering**")
     top_diagnoses = sorted(diagnosis_counts.items(), key=lambda item: item[1], reverse=True)[:10]
     st.dataframe([{"Radiodiagnosis": diagnosis, "Total": total} for diagnosis, total in top_diagnoses], use_container_width=True, hide_index=True)
 
@@ -720,7 +810,7 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.3 Admin Database Dashboard</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.4 Database Safety & Clinical Data Preparation</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -730,6 +820,8 @@ if "admin_authenticated" not in st.session_state:
 
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
+    st.markdown("SQLite Clinical Bank")
+    st.markdown("Admin Database available")
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
     st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
