@@ -250,7 +250,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.2.4 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.1 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -446,7 +446,7 @@ init_cases_table()
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
-    """
+    f"""
     <style>
     :root { --phima-navy: #061426; --phima-blue: #0B1F3A; --phima-gold: #D4A017; --phima-gold-hover: #F0B92D; --phima-white: #FFFFFF; --phima-ink: #EAF2FF; --phima-muted: #B9C7DA; --phima-green-bg: rgba(14, 86, 55, 0.94); --phima-green-border: #31D782; --phima-green-text: #C8FFD9; }
     .stApp { background: radial-gradient(circle at top left, rgba(21, 62, 110, 0.6), transparent 34rem), linear-gradient(180deg, #061426 0%, #081A30 42%, #06101F 100%); color: var(--phima-ink); }
@@ -478,7 +478,7 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.1 Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - {APP_VERSION_LABEL}</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -575,7 +575,7 @@ if "ai_report_text" in st.session_state:
         "Final Corrected Report",
         height=360,
         key="corrected_report_editor",
-        help="Primary final report field for copying and future saving.",
+        help="Primary final report field. Edits are auto-saved as the main final report output.",
     )
     st.session_state.corrected_report_text = corrected_report_text
     if corrected_report_text != st.session_state.get("final_corrected_report", ""):
@@ -583,17 +583,36 @@ if "ai_report_text" in st.session_state:
         if st.session_state.get("last_saved_final_report_hash") != report_hash(corrected_report_text):
             set_report_status("Corrected by Radiologist")
 
-
     status = st.session_state.get("report_status", "Draft AI Report")
-    status_steps = ["Draft AI Report", "Corrected by Radiologist", "Final Report Ready"]
+
+    status_steps = [
+        "Draft AI Report",
+        "Corrected by Radiologist",
+        "Final Report Ready",
+    ]
+
     status_markup = "".join(
         f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
         for step in status_steps
     )
-    st.markdown(f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>', unsafe_allow_html=True)
 
-    st.text_input("Suspek Radiodiagnosis", key="radiodiagnosis", placeholder="Ringkasan radiodiagnosis untuk database dan analytics")
-    st.text_area("Notes", key="case_notes", height=110, placeholder="Catatan internal tambahan")
+    st.markdown(
+        f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.text_input(
+        "Suspek Radiodiagnosis",
+        key="radiodiagnosis",
+        placeholder="Ringkasan radiodiagnosis untuk database dan analytics",
+    )
+
+    st.text_area(
+        "Notes",
+        key="case_notes",
+        height=110,
+        placeholder="Catatan internal tambahan",
+    )
 
     col_ready, col_copy = st.columns(2)
     with col_ready:
