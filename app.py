@@ -193,7 +193,9 @@ st.markdown(
     .phima-subtitle { color: rgba(255, 255, 255, 0.94); font-size: clamp(1.4rem, 2.2vw, 2rem); font-weight: 750; max-width: 940px; margin-top: 1.05rem; }
     .phima-tagline { color: var(--phima-gold); font-size: clamp(1.06rem, 1.55vw, 1.32rem); font-weight: 800; margin-top: 0.65rem; letter-spacing: 0.02em; }
     .phima-card { border: 1px solid rgba(212, 160, 23, 0.32); border-left: 7px solid var(--phima-gold); border-radius: 22px; padding: 1.45rem 1.65rem; background: rgba(9, 28, 51, 0.86); margin: 1.2rem 0 1.6rem; box-shadow: 0 18px 48px rgba(0,0,0,0.22); font-size: 1.18rem; line-height: 1.65; color: var(--phima-ink); }
-    .phima-stage { color: var(--phima-white); font-size: clamp(1.95rem, 3vw, 2.85rem); font-weight: 950; letter-spacing: 0.03em; padding: 1.15rem 1.4rem; margin: 2.1rem 0 1rem; border-radius: 22px; background: linear-gradient(135deg, rgba(11,31,58,0.96), rgba(18,58,100,0.88)); border: 1px solid rgba(212,160,23,0.36); box-shadow: 0 18px 42px rgba(0,0,0,0.28); }
+    .phima-stage { color: var(--phima-white); padding: 1rem 1.35rem; margin: 2.1rem 0 1rem; border-radius: 22px; background: linear-gradient(135deg, rgba(11,31,58,0.96), rgba(18,58,100,0.88)); border: 1px solid rgba(212,160,23,0.36); box-shadow: 0 18px 42px rgba(0,0,0,0.28); text-align: center; }
+    .phima-stage-kicker { display: block; font-size: clamp(1.32rem, 2.1vw, 2.05rem); font-weight: 750; line-height: 1.15; letter-spacing: 0.02em; }
+    .phima-stage-title { display: block; margin-top: 0.28rem; font-size: clamp(1.58rem, 2.45vw, 2.28rem); font-weight: 950; line-height: 1.1; letter-spacing: 0.045em; }
     .phima-description { color: #D9E7F8; font-size: clamp(1.28rem, 1.7vw, 1.55rem); line-height: 1.65; font-weight: 650; margin: 0.7rem 0 1rem; }
     label, .stTextArea label, [data-testid="stMarkdownContainer"] p, .stMarkdown { font-size: 1.08rem; }
     textarea { font-size: 1.1rem !important; line-height: 1.6 !important; border-radius: 18px !important; }
@@ -222,10 +224,10 @@ for key, initial in {"stage_1_confirmed": False, "stage_2_visible": False, "stag
     st.session_state.setdefault(key, initial)
 
 st.markdown("""
-<div class="phima-card"><strong>Instruksi:</strong> Isi tiap tahap dengan bahasa klinis singkat atau shorthand PHIMA. Setelah tiap input, lakukan konfirmasi untuk melihat ringkasan formal sebelum melanjutkan.</div>
+<div class="phima-card"><strong>Instruksi:</strong> Isi tiap tahap menggunakan bahasa klinis singkat atau ekspansi singkatan radiologi yang sesuai. Setelah tiap input, lakukan konfirmasi untuk melihat ringkasan formal sebelum melanjutkan.</div>
 """, unsafe_allow_html=True)
 
-st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 1 — GIGI</h2>', unsafe_allow_html=True)
+st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 1</span><span class="phima-stage-title">GIGI</span></h2>', unsafe_allow_html=True)
 st.markdown('<div class="phima-description">Masukkan temuan radiografis mengenai jumlah dan distribusi gigi, area edentulous, impaksi, karies PR/PIR, nekrosis pulpa, gangren radiks, abses periapikal, restorasi TD/TP, crowding/diastema, serta status periodontal.</div>', unsafe_allow_html=True)
 stage_1 = st.text_area("Input temuan gigi", height=170, placeholder="Contoh: Jumlah gigi 28. 18 IM H PE B kanalis. 36 PIR AP. 46 TD. ED 14, 15. PG ringan.", key="stage_1")
 if st.button("Konfirmasi Tahap 1", type="primary"):
@@ -239,7 +241,7 @@ if st.session_state.stage_1_confirmed:
         st.session_state.stage_2_visible = True
 
 if st.session_state.get("stage_2_visible"):
-    st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 2 — MANDIBULA, MAKSILA, SINUS MAKSILARIS</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 2</span><span class="phima-stage-title">MANDIBULA • MAKSILA • SINUS MAKSILARIS</span></h2>', unsafe_allow_html=True)
     st.markdown('<div class="phima-description">Masukkan temuan radiografis pada mandibula, maksila, sinus maksilaris, kanalis mandibularis, alveolar crest, lesi tulang, serta hubungan gigi impaksi terhadap struktur anatomi sekitar.</div>', unsafe_allow_html=True)
     stage_2 = st.text_area("Input temuan mandibula, maksila, dan sinus maksilaris", height=170, placeholder="Contoh: Mandibula dan maksila DBN. Sinus maksilaris kanan-kiri DBN. Akar 18 superimpose dengan sinus maksilaris.", key="stage_2")
     if st.button("Konfirmasi Tahap 2", type="primary"):
@@ -251,7 +253,7 @@ if st.session_state.get("stage_2_visible"):
             st.session_state.stage_3_visible = True
 
 if st.session_state.get("stage_3_visible"):
-    st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 3 — TMJ</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 3</span><span class="phima-stage-title">TMJ</span></h2>', unsafe_allow_html=True)
     st.markdown('<div class="phima-description">Masukkan evaluasi radiografis TMJ meliputi kondilus kanan dan kiri, posisi atau asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, serta penebalan kortikal.</div>', unsafe_allow_html=True)
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
     if st.button("Generate Final PHIMA Report", type="primary"):
