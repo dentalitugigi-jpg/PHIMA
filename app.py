@@ -5,14 +5,20 @@ Dental panoramic guided interpretation and shorthand-to-report generator.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import sqlite3
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
 
 
 APP_VERSION_LABEL = "PHIMA v0.3.1 — Auto-Save Final Report Workflow"
+DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
 TMJ_NORMAL_WORDING = (
@@ -27,6 +33,7 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "D": "distoangular",
     "V": "vertikal",
     "PE": "partial erupsi",
+    "T": "Terbenam",
     "B": "bersinggungan",
     "S": "superimpose",
     "PR": "pulpitis reversible",
@@ -36,13 +43,17 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "GR": "gangren radiks",
     "ED": "edentulous",
     "PG": "periodontitis generalisata",
+    "PKL": "Periodontitis Kronis Lokalisata",
+    "PKG": "Periodontitis Kronis Generalisata",
+    "NF": "Nekrosis pulpa gigi dengan apikal akar tampak mengalami resorpsi fisiologis",
+    "PB": "Persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis",
     "TD": "tambalan sampai dentin",
     "TP": "tambalan sampai kamar pulpa",
     "DBN": "dalam batas normal radiografis",
 }
 
 TOKEN_RE = re.compile(
-    r"\b(DBN|PIR|CROWDING|PE|PR|NP|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|B|S)\b", re.IGNORECASE
+    r"\b(DBN|PIR|CROWDING|PKL|PKG|PE|PR|NP|NF|PB|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|T|B|S)\b", re.IGNORECASE
 )
 TOOTH_RE = re.compile(r"\b(?:[1-4][1-8]|[5-8][1-5])\b")
 
@@ -65,7 +76,7 @@ REPORT_TEMPLATES: dict[str, ReportTemplate] = {
     "pediatric": ReportTemplate(
         "pediatric",
         "Anak — Mixed Dentition",
-        "Format lebih singkat dan fokus untuk gigi sulung, gigi permanen, persistensi gigi sulung, resorpsi fisiologis akar, benih gigi permanen, karies, gangren radiks, nekrosis pulpa, serta pulpitis.",
+        "Format lebih singkat dan fokus untuk gigi sulung, gigi permanen, persistensi gigi sulung dengan apikal akar normal, nekrosis pulpa dengan resorpsi fisiologis, benih gigi permanen, karies, gangren radiks, nekrosis pulpa, serta pulpitis.",
     ),
     "ortho": ReportTemplate(
         "ortho",
@@ -75,7 +86,7 @@ REPORT_TEMPLATES: dict[str, ReportTemplate] = {
     "impaction": ReportTemplate(
         "impaction",
         "Impaksi — Fokus M3",
-        "Fokus impaksi molar tiga 18, 28, 38, 48, termasuk posisi impaksi, partial erupsi/terbenam/perikoronitis bila tertulis, serta relasi akar terhadap sinus maksilaris atau kanalis mandibularis tanpa mengarang relasi yang tidak dituliskan.",
+        "Fokus impaksi molar tiga 18, 28, 38, 48, termasuk posisi impaksi, partial erupsi/terbenam/perikoronitis, periodontitis kronis lokalisata/generalisata bila tertulis, serta relasi akar terhadap sinus maksilaris atau kanalis mandibularis tanpa mengarang relasi yang tidak dituliskan.",
     ),
     "tmj": ReportTemplate(
         "tmj",
@@ -107,6 +118,7 @@ ABBREVIATIONS: dict[str, Finding] = {
     "D": Finding("Arah gigi impaksi tampak distoangular.", "Impaksi gigi posisi distoangular.", "Evaluasi bedah mulut dan korelasi klinis."),
     "V": Finding("Arah gigi impaksi tampak vertikal.", "Impaksi gigi posisi vertikal.", "Evaluasi potensi erupsi dan kebutuhan perawatan."),
     "PE": Finding("Tampak partial erupsi pada gigi terkait.", "Status partial erupsi.", "Korelasi klinis terhadap jaringan lunak perikoronal."),
+    "T": Finding("Gigi terkait tampak terbenam.", "Terbenam.", "Evaluasi relasi gigi terbenam terhadap struktur anatomis sekitar."),
     "B": Finding("Tampak relasi bersinggungan dengan struktur anatomis sekitar.", "Relasi anatomis dekat/bersinggungan.", "Pertimbangkan evaluasi radiografis lanjutan bila indikatif."),
     "S": Finding("Tampak superimpose dengan struktur anatomis sekitar.", "Superimposisi radiografis.", "Pertimbangkan proyeksi atau modalitas tambahan bila diperlukan."),
     "PR": Finding("Tampak gambaran karies yang secara klinis dapat berkaitan dengan pulpitis reversible.", "Suspek pulpitis reversible.", "Evaluasi klinis, tes vitalitas, dan perawatan restoratif."),
@@ -116,6 +128,10 @@ ABBREVIATIONS: dict[str, Finding] = {
     "GR": Finding("Tampak sisa akar/gangren radiks pada regio terkait.", "Suspek gangren radiks.", "Evaluasi prognosis; pertimbangkan ekstraksi bila tidak dapat dipertahankan."),
     "ED": Finding("Tampak area edentulous pada regio terkait.", "Status edentulous.", "Pertimbangkan rehabilitasi prostodontik sesuai kondisi jaringan pendukung."),
     "PG": Finding("Tampak penurunan tulang alveolar menyeluruh yang mengarah pada periodontitis generalisata.", "Suspek periodontitis generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "PKL": Finding("Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata.", "Periodontitis Kronis Lokalisata.", "Pemeriksaan periodontal pada area lokalisata dan terapi periodontal sesuai indikasi."),
+    "PKG": Finding("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.", "Periodontitis Kronis Generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "NF": Finding("Tampak nekrosis pulpa dengan apikal akar tampak mengalami resorpsi fisiologis.", "Nekrosis pulpa.", "Evaluasi klinis gigi sulung dan rencana perawatan sesuai status erupsi gigi pengganti."),
+    "PB": Finding("Tampak persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.", "Persistensi.", "Evaluasi klinis persistensi gigi sulung dan pertimbangkan perawatan interseptif bila indikatif."),
     "TD": Finding("Tampak restorasi/tambalan sampai dentin pada gigi terkait.", "Status tambalan sampai dentin.", "Evaluasi adaptasi restorasi dan kontrol berkala."),
     "TP": Finding("Tampak restorasi/tambalan sampai kamar pulpa pada gigi terkait.", "Status tambalan sampai kamar pulpa.", "Evaluasi endodontik dan integritas restorasi."),
     "DBN": Finding("Struktur yang dinilai tampak dalam batas normal radiografis.", "Dalam batas normal radiografis.", "Kontrol berkala sesuai indikasi klinis."),
@@ -124,7 +140,7 @@ ABBREVIATIONS: dict[str, Finding] = {
 
 
 def expand_abbreviations(text: str) -> str:
-    """Expand PHIMA shorthand abbreviations while preserving user wording."""
+    """Expand PHIMA shorthand abbreviations using the active knowledge dictionary."""
 
     def replace(match: re.Match[str]) -> str:
         code = match.group(1).upper()
@@ -132,7 +148,32 @@ def expand_abbreviations(text: str) -> str:
             return "crowding"
         return f"{code} ({ABBREVIATION_EXPANSIONS[code]})"
 
-    return TOKEN_RE.sub(replace, text.strip())
+    expanded_lines: list[str] = []
+    for raw_line in text.strip().splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        codes = {match.group(1).upper() for match in TOKEN_RE.finditer(line)}
+        location = format_location(line)
+        impaction_terms = [
+            ABBREVIATION_EXPANSIONS[code].lower()
+            for code in ("IM", "H", "M", "D", "V", "PE", "T")
+            if code in codes
+        ]
+        if impaction_terms and location != "regio yang dituliskan":
+            expanded_lines.append(f"{location.capitalize()} {' '.join(impaction_terms)}.")
+        elif "PKL" in codes:
+            expanded_lines.append(f"Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata pada area {location}.")
+        elif "PKG" in codes:
+            expanded_lines.append("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.")
+        elif "NF" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak nekrosis pulpa pada {location} dengan apikal akar tampak mengalami resorpsi fisiologis.")
+        elif "PB" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak persistensi {location} dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.")
+        else:
+            expanded_lines.append(TOKEN_RE.sub(replace, line))
+
+    return " ".join(expanded_lines)
 
 
 def format_location(text: str) -> str:
@@ -176,7 +217,7 @@ def render_legacy_report(entries: list[tuple[str, str, Finding]]) -> dict[str, l
     seen_suggestions: set[str] = set()
     for code, location, finding in entries:
         interpretation.append(f"Pada {location}: {finding.interpretation} ({ABBREVIATION_EXPANSIONS.get(code, code)})")
-        diagnosis.append(f"{finding.diagnosis} Lokasi: {location}.")
+        diagnosis.append(f"{finding.diagnosis.rstrip('.')} Lokasi: {location}.")
         if finding.suggestion not in seen_suggestions:
             suggestions.append(finding.suggestion)
             seen_suggestions.add(finding.suggestion)
@@ -286,6 +327,122 @@ def set_report_status(status: str) -> None:
     st.session_state.report_status = status
 
 
+def utc_timestamp() -> str:
+    """Return an ISO-8601 UTC timestamp for PHIMA database records."""
+
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def report_hash(report_text: str) -> str:
+    """Return a stable hash used to prevent duplicate final-report saves."""
+
+    return hashlib.sha256(report_text.encode("utf-8")).hexdigest()
+
+
+def init_cases_table() -> None:
+    """Create or migrate the PHIMA cases table used by the auto-save workflow."""
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cases (
+                case_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                user_name TEXT,
+                report_template TEXT,
+                stage_1_findings TEXT,
+                stage_2_findings TEXT,
+                stage_3_findings TEXT,
+                generated_ai_report TEXT,
+                final_corrected_report TEXT,
+                radiodiagnosis TEXT,
+                notes TEXT,
+                report_status TEXT NOT NULL
+            )
+            """
+        )
+        existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(cases)")}
+        required_columns = {
+            "case_id": "TEXT PRIMARY KEY",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
+            "user_name": "TEXT",
+            "report_template": "TEXT",
+            "stage_1_findings": "TEXT",
+            "stage_2_findings": "TEXT",
+            "stage_3_findings": "TEXT",
+            "generated_ai_report": "TEXT",
+            "final_corrected_report": "TEXT",
+            "radiodiagnosis": "TEXT",
+            "notes": "TEXT",
+            "report_status": "TEXT",
+        }
+        for column, definition in required_columns.items():
+            if column not in existing_columns and column != "case_id":
+                connection.execute(f"ALTER TABLE cases ADD COLUMN {column} {definition}")
+
+
+def save_case_to_database() -> bool:
+    """Insert or update the current case when the final corrected report is ready."""
+
+    final_report = st.session_state.get("corrected_report_text", "")
+    current_hash = report_hash(final_report)
+    if st.session_state.get("last_saved_final_report_hash") == current_hash:
+        return False
+
+    init_cases_table()
+    now = utc_timestamp()
+    case_id = st.session_state.setdefault("case_id", str(uuid.uuid4()))
+    created_at = st.session_state.setdefault("case_created_at", now)
+    payload = {
+        "case_id": case_id,
+        "created_at": created_at,
+        "updated_at": now,
+        "user_name": st.session_state.get("user_name", ""),
+        "report_template": st.session_state.get("report_template", "Panoramic Radiology Report"),
+        "stage_1_findings": st.session_state.get("stage_1", ""),
+        "stage_2_findings": st.session_state.get("stage_2", ""),
+        "stage_3_findings": st.session_state.get("stage_3", ""),
+        "generated_ai_report": st.session_state.get("generated_ai_report_original", st.session_state.get("ai_report_text", "")),
+        "final_corrected_report": final_report,
+        "radiodiagnosis": st.session_state.get("radiodiagnosis", ""),
+        "notes": st.session_state.get("case_notes", ""),
+        "report_status": "Final Report Ready",
+    }
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            INSERT INTO cases (
+                case_id, created_at, updated_at, user_name, report_template,
+                stage_1_findings, stage_2_findings, stage_3_findings, generated_ai_report,
+                final_corrected_report, radiodiagnosis, notes, report_status
+            ) VALUES (
+                :case_id, :created_at, :updated_at, :user_name, :report_template,
+                :stage_1_findings, :stage_2_findings, :stage_3_findings, :generated_ai_report,
+                :final_corrected_report, :radiodiagnosis, :notes, :report_status
+            )
+            ON CONFLICT(case_id) DO UPDATE SET
+                updated_at=excluded.updated_at,
+                user_name=excluded.user_name,
+                report_template=excluded.report_template,
+                stage_1_findings=excluded.stage_1_findings,
+                stage_2_findings=excluded.stage_2_findings,
+                stage_3_findings=excluded.stage_3_findings,
+                generated_ai_report=excluded.generated_ai_report,
+                final_corrected_report=excluded.final_corrected_report,
+                radiodiagnosis=excluded.radiodiagnosis,
+                notes=excluded.notes,
+                report_status=excluded.report_status
+            """,
+            payload,
+        )
+    st.session_state.last_saved_final_report_hash = current_hash
+    st.session_state.last_saved_at = now
+    return True
+
+
+init_cases_table()
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
@@ -321,7 +478,7 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · {APP_VERSION_LABEL}</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - {APP_VERSION_LABEL}</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -329,6 +486,8 @@ st.markdown(
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
+    st.text_input("User name", key="user_name", placeholder="Nama radiolog / operator")
+    st.selectbox("Selected template", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
@@ -395,6 +554,7 @@ if st.session_state.get("stage_3_visible"):
     if st.button("Generate Final PHIMA Report", type="primary"):
         st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3, st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY))
         st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
+        st.session_state.generated_ai_report_original = st.session_state.ai_report_text
         st.session_state.corrected_report_text = st.session_state.ai_report_text
         st.session_state.final_corrected_report = st.session_state.corrected_report_text
         st.session_state.ai_report_editor = st.session_state.ai_report_text
@@ -403,21 +563,13 @@ if st.session_state.get("stage_3_visible"):
 
 if "ai_report_text" in st.session_state:
     st.header("Radiologist Correction Workflow")
-    status = st.session_state.get("report_status", "Draft AI Report")
-    status_steps = ["Draft AI Report", "Corrected by Radiologist", "Final Report Ready"]
-    status_markup = "".join(
-        f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
-        for step in status_steps
-    )
-    st.markdown(f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>', unsafe_allow_html=True)
-
-    ai_report_text = st.text_area(
+    st.text_area(
         "Generated AI Report",
-        height=360,
-        key="ai_report_editor",
-        help="Editable AI-generated draft. Changes here do not replace the final corrected report until copied manually by the radiologist.",
+        value=st.session_state.get("generated_ai_report_original", st.session_state.get("ai_report_text", "")),
+        height=260,
+        disabled=True,
+        help="Original AI-generated draft saved separately from the final corrected report.",
     )
-    st.session_state.ai_report_text = ai_report_text
 
     corrected_report_text = st.text_area(
         "Final Corrected Report",
@@ -426,17 +578,52 @@ if "ai_report_text" in st.session_state:
         help="Primary final report field. Edits are auto-saved as the main final report output.",
     )
     st.session_state.corrected_report_text = corrected_report_text
-    st.session_state.final_corrected_report = corrected_report_text
-    if status != "Final Report Ready":
-        set_report_status("Corrected by Radiologist")
-    st.caption("Auto-save aktif: perubahan pada Final Corrected Report langsung tersimpan sebagai output utama.")
+    if corrected_report_text != st.session_state.get("final_corrected_report", ""):
+        st.session_state.final_corrected_report = corrected_report_text
+        if st.session_state.get("last_saved_final_report_hash") != report_hash(corrected_report_text):
+            set_report_status("Corrected by Radiologist")
 
-    col_update, col_copy = st.columns(2)
-    with col_update:
-        if st.button("Update Final Report", type="primary"):
+    status = st.session_state.get("report_status", "Draft AI Report")
+
+    status_steps = [
+        "Draft AI Report",
+        "Corrected by Radiologist",
+        "Final Report Ready",
+    ]
+
+    status_markup = "".join(
+        f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
+        for step in status_steps
+    )
+
+    st.markdown(
+        f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.text_input(
+        "Suspek Radiodiagnosis",
+        key="radiodiagnosis",
+        placeholder="Ringkasan radiodiagnosis untuk database dan analytics",
+    )
+
+    st.text_area(
+        "Notes",
+        key="case_notes",
+        height=110,
+        placeholder="Catatan internal tambahan",
+    )
+
+    col_ready, col_copy = st.columns(2)
+    with col_ready:
+        if st.button("Final Report Ready", type="primary"):
             st.session_state.final_corrected_report = st.session_state.corrected_report_text
             set_report_status("Final Report Ready")
-            st.rerun()
+            saved = save_case_to_database()
+            if saved:
+                st.success("Final report ready and automatically saved to PHIMA Bank Data.")
+            else:
+                st.info("Final report is already saved to PHIMA Bank Data. Edit the Final Corrected Report to update the saved case.")
     with col_copy:
         final_report_for_copy = st.session_state.get("final_corrected_report", st.session_state.corrected_report_text)
         st.download_button(
