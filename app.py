@@ -177,8 +177,112 @@ def render_report(entries: list[tuple[str, str, Finding]]) -> dict[str, list[str
 
 st.set_page_config(page_title="PHIMA Dental Report Generator", page_icon="🦷", layout="wide")
 
-st.title("PHIMA")
-st.caption("Generator laporan radiografi panoramik berbasis shorthand untuk kedokteran gigi.")
+st.markdown(
+    """
+    <style>
+    :root {
+        --phima-navy: #0B1F3A;
+        --phima-gold: #D4A017;
+        --phima-gold-hover: #B88913;
+        --phima-white: #FFFFFF;
+    }
+
+    .stApp {
+        background: var(--phima-white);
+    }
+
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, var(--phima-navy) 0%, #102B4F 100%);
+    }
+
+    [data-testid="stSidebar"] * {
+        color: var(--phima-white) !important;
+    }
+
+    [data-testid="stSidebar"] code {
+        color: var(--phima-navy) !important;
+        background-color: rgba(255, 255, 255, 0.92) !important;
+    }
+
+    .phima-hero {
+        background: linear-gradient(135deg, var(--phima-navy) 0%, #14345F 100%);
+        border-radius: 24px;
+        padding: 2.25rem 2.5rem;
+        margin-bottom: 1.75rem;
+        box-shadow: 0 18px 45px rgba(11, 31, 58, 0.16);
+        border: 1px solid rgba(212, 160, 23, 0.35);
+    }
+
+    .phima-eyebrow {
+        color: var(--phima-gold);
+        font-size: 0.85rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        margin-bottom: 0.65rem;
+        text-transform: uppercase;
+    }
+
+    .phima-title {
+        color: var(--phima-white);
+        font-size: clamp(2.35rem, 5vw, 4.4rem);
+        font-weight: 900;
+        line-height: 0.95;
+        margin: 0;
+    }
+
+    .phima-subtitle {
+        color: rgba(255, 255, 255, 0.88);
+        font-size: 1.08rem;
+        max-width: 760px;
+        margin-top: 0.9rem;
+    }
+
+    div[data-testid="stButton"] {
+        display: flex;
+        justify-content: center;
+        margin: 1.5rem 0 1.25rem;
+    }
+
+    div[data-testid="stButton"] > button {
+        background-color: var(--phima-gold) !important;
+        color: var(--phima-white) !important;
+        border: 0 !important;
+        border-radius: 999px !important;
+        min-height: 3.9rem;
+        min-width: min(100%, 360px);
+        padding: 0.95rem 2.4rem !important;
+        font-size: 1.12rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.02em;
+        box-shadow: 0 14px 28px rgba(212, 160, 23, 0.28);
+        transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    div[data-testid="stButton"] > button:hover {
+        background-color: var(--phima-gold-hover) !important;
+        color: var(--phima-white) !important;
+        box-shadow: 0 18px 34px rgba(184, 137, 19, 0.34);
+        transform: translateY(-1px);
+    }
+
+    div[data-testid="stButton"] > button:focus,
+    div[data-testid="stButton"] > button:active {
+        color: var(--phima-white) !important;
+        border: 0 !important;
+        box-shadow: 0 0 0 0.18rem rgba(212, 160, 23, 0.32), 0 14px 28px rgba(212, 160, 23, 0.28) !important;
+    }
+    </style>
+
+    <section class="phima-hero">
+        <div class="phima-eyebrow">Dental Radiology Platform</div>
+        <h1 class="phima-title">PHIMA</h1>
+        <div class="phima-subtitle">
+            Generator laporan radiografi panoramik berbasis shorthand untuk kedokteran gigi.
+        </div>
+    </section>
+    """,
+    unsafe_allow_html=True,
+)
 
 with st.sidebar:
     st.header("Daftar Singkatan")
@@ -211,7 +315,7 @@ shorthand = st.text_area(
     placeholder="Contoh: 18 IM\n36 AP PE\n46 H\nPG Crowding",
 )
 
-generate = st.button("Generate Report", type="primary", use_container_width=True)
+generate = st.button("Interpretasi Panoramik", type="primary")
 
 if generate:
     report = render_report(parse_shorthand(shorthand))
@@ -234,4 +338,4 @@ if generate:
         "Temuan harus dikorelasikan dengan pemeriksaan klinis, riwayat pasien, kualitas citra, serta pemeriksaan penunjang lain bila diperlukan."
     )
 else:
-    st.info("Klik **Generate Report** untuk membuat draf laporan radiografi panoramik.")
+    st.info("Klik **Interpretasi Panoramik** untuk membuat draf laporan radiografi panoramik.")
