@@ -484,7 +484,7 @@ st.markdown(
 )
 
 with st.sidebar:
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · PHIMA v0.3.1 — Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.1 Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("User name", key="user_name", placeholder="Nama radiolog / operator")
     st.selectbox("Selected template", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
