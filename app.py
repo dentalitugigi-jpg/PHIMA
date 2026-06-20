@@ -922,7 +922,7 @@ if "ai_report_text" in st.session_state:
         st.subheader("Interpretasi Final")
         st.text(st.session_state.final_corrected_report)
 
-with st.expander("PHIMA v0.1 shorthand generator tetap tersedia"):
+with st.expander("Shorthand generator"):
     sample = "18 IM H PE\n36 AP NP\n46 PR\nPG Crowding"
     shorthand = st.text_area("Shorthand input v0.1", value=sample, height=140, key="legacy_shorthand")
     if st.button("Interpretasi Panoramik v0.1", type="primary"):
