@@ -144,10 +144,10 @@ def formalize_stage_summary(stage_name: str, text: str, default: str) -> str:
 
     cleaned = expand_abbreviations(text)
     if not cleaned:
-        return default
+        return f"Temuan: {default}"
     sentences = [line.strip(" .") for line in cleaned.splitlines() if line.strip()]
     joined = "; ".join(sentences)
-    return f"Berdasarkan input {stage_name}, didapatkan temuan: {joined}."
+    return f"Temuan: {joined}."
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str) -> dict[str, str]:
@@ -175,28 +175,37 @@ def build_final_report(stage_1: str, stage_2: str, stage_3: str) -> dict[str, st
     }
 
 
-st.set_page_config(page_title="PHIMA v0.2 Dental Report Generator", page_icon="🦷", layout="wide")
+st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
     """
     <style>
-    :root { --phima-navy: #0B1F3A; --phima-gold: #D4A017; --phima-gold-hover: #B88913; --phima-white: #FFFFFF; }
-    .stApp { background: var(--phima-white); }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, var(--phima-navy) 0%, #102B4F 100%); }
+    :root { --phima-navy: #061426; --phima-blue: #0B1F3A; --phima-gold: #D4A017; --phima-gold-hover: #F0B92D; --phima-white: #FFFFFF; --phima-ink: #EAF2FF; --phima-muted: #B9C7DA; --phima-green-bg: rgba(14, 86, 55, 0.94); --phima-green-border: #31D782; --phima-green-text: #C8FFD9; }
+    .stApp { background: radial-gradient(circle at top left, rgba(21, 62, 110, 0.6), transparent 34rem), linear-gradient(180deg, #061426 0%, #081A30 42%, #06101F 100%); color: var(--phima-ink); }
+    .block-container { padding-top: 2.2rem; max-width: 1180px; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #061426 0%, #0B1F3A 55%, #0E2B4A 100%); border-right: 1px solid rgba(212, 160, 23, 0.28); }
     [data-testid="stSidebar"] * { color: var(--phima-white) !important; }
     [data-testid="stSidebar"] code { color: var(--phima-navy) !important; background-color: rgba(255, 255, 255, 0.92) !important; }
-    .phima-hero { background: linear-gradient(135deg, var(--phima-navy) 0%, #14345F 100%); border-radius: 24px; padding: 2.25rem 2.5rem; margin-bottom: 1.75rem; box-shadow: 0 18px 45px rgba(11, 31, 58, 0.16); border: 1px solid rgba(212, 160, 23, 0.35); }
-    .phima-eyebrow { color: var(--phima-gold); font-size: 0.85rem; font-weight: 800; letter-spacing: 0.18em; margin-bottom: 0.65rem; text-transform: uppercase; }
-    .phima-title { color: var(--phima-white); font-size: clamp(2.35rem, 5vw, 4.4rem); font-weight: 900; line-height: 0.95; margin: 0; }
-    .phima-subtitle { color: rgba(255, 255, 255, 0.88); font-size: 1.08rem; max-width: 860px; margin-top: 0.9rem; }
-    .phima-card { border: 1px solid rgba(11, 31, 58, 0.12); border-left: 6px solid var(--phima-gold); border-radius: 18px; padding: 1.1rem 1.25rem; background: #fffdf8; margin: 1rem 0; }
-    .phima-stage { color: var(--phima-navy); font-weight: 900; }
-    div[data-testid="stButton"] { display: flex; justify-content: center; margin: 1.2rem 0 1.1rem; }
-    div[data-testid="stButton"] > button { background-color: var(--phima-gold) !important; color: var(--phima-white) !important; border: 0 !important; border-radius: 999px !important; min-height: 3.7rem; min-width: min(100%, 360px); padding: 0.9rem 2.2rem !important; font-size: 1.05rem !important; font-weight: 800 !important; letter-spacing: 0.02em; box-shadow: 0 14px 28px rgba(212, 160, 23, 0.28); transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
-    div[data-testid="stButton"] > button:hover { background-color: var(--phima-gold-hover) !important; color: var(--phima-white) !important; box-shadow: 0 18px 34px rgba(184, 137, 19, 0.34); transform: translateY(-1px); }
-    div[data-testid="stButton"] > button:focus, div[data-testid="stButton"] > button:active { color: var(--phima-white) !important; border: 0 !important; box-shadow: 0 0 0 0.18rem rgba(212, 160, 23, 0.32), 0 14px 28px rgba(212, 160, 23, 0.28) !important; }
+    .phima-hero { background: linear-gradient(135deg, rgba(6, 20, 38, 0.98) 0%, rgba(13, 47, 86, 0.96) 56%, rgba(7, 26, 48, 0.98) 100%); border-radius: 30px; padding: 3rem 3.2rem; margin-bottom: 2rem; box-shadow: 0 26px 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08); border: 1px solid rgba(212, 160, 23, 0.42); position: relative; overflow: hidden; }
+    .phima-hero::after { content: ""; position: absolute; inset: auto -8rem -11rem auto; width: 26rem; height: 26rem; background: radial-gradient(circle, rgba(212,160,23,0.28), transparent 68%); }
+    .phima-eyebrow { color: var(--phima-gold); font-size: 0.98rem; font-weight: 900; letter-spacing: 0.22em; margin-bottom: 0.8rem; text-transform: uppercase; }
+    .phima-title { color: var(--phima-white); font-size: clamp(3.2rem, 6vw, 6.2rem); font-weight: 950; line-height: 0.95; margin: 0; letter-spacing: 0.08em; text-shadow: 0 12px 32px rgba(0,0,0,0.32); }
+    .phima-subtitle { color: rgba(255, 255, 255, 0.94); font-size: clamp(1.4rem, 2.2vw, 2rem); font-weight: 750; max-width: 940px; margin-top: 1.05rem; }
+    .phima-tagline { color: var(--phima-gold); font-size: clamp(1.06rem, 1.55vw, 1.32rem); font-weight: 800; margin-top: 0.65rem; letter-spacing: 0.02em; }
+    .phima-card { border: 1px solid rgba(212, 160, 23, 0.32); border-left: 7px solid var(--phima-gold); border-radius: 22px; padding: 1.45rem 1.65rem; background: rgba(9, 28, 51, 0.86); margin: 1.2rem 0 1.6rem; box-shadow: 0 18px 48px rgba(0,0,0,0.22); font-size: 1.18rem; line-height: 1.65; color: var(--phima-ink); }
+    .phima-stage { color: var(--phima-white); font-size: clamp(1.95rem, 3vw, 2.85rem); font-weight: 950; letter-spacing: 0.03em; padding: 1.15rem 1.4rem; margin: 2.1rem 0 1rem; border-radius: 22px; background: linear-gradient(135deg, rgba(11,31,58,0.96), rgba(18,58,100,0.88)); border: 1px solid rgba(212,160,23,0.36); box-shadow: 0 18px 42px rgba(0,0,0,0.28); }
+    .phima-description { color: #D9E7F8; font-size: clamp(1.28rem, 1.7vw, 1.55rem); line-height: 1.65; font-weight: 650; margin: 0.7rem 0 1rem; }
+    label, .stTextArea label, [data-testid="stMarkdownContainer"] p, .stMarkdown { font-size: 1.08rem; }
+    textarea { font-size: 1.1rem !important; line-height: 1.6 !important; border-radius: 18px !important; }
+    div[data-testid="stAlert"] { background: var(--phima-green-bg) !important; border: 1px solid var(--phima-green-border) !important; border-radius: 22px !important; padding: 1.35rem 1.55rem !important; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28); }
+    div[data-testid="stAlert"] * { color: var(--phima-green-text) !important; font-size: 1.2rem !important; line-height: 1.65 !important; font-weight: 750 !important; }
+    div[data-testid="stButton"] { display: flex; justify-content: center; margin: 1.35rem 0 1.25rem; }
+    div[data-testid="stButton"] > button { background: linear-gradient(135deg, var(--phima-gold) 0%, #E7B438 100%) !important; color: #071426 !important; border: 0 !important; border-radius: 18px !important; min-height: 4.15rem; min-width: min(100%, 390px); padding: 1.05rem 2.55rem !important; font-size: 1.18rem !important; font-weight: 900 !important; letter-spacing: 0.02em; box-shadow: 0 16px 32px rgba(212, 160, 23, 0.34); transition: background 160ms ease, box-shadow 160ms ease, transform 160ms ease, filter 160ms ease; }
+    div[data-testid="stButton"] > button:hover { background: linear-gradient(135deg, var(--phima-gold-hover) 0%, #FFD36A 100%) !important; color: #061426 !important; box-shadow: 0 22px 42px rgba(240, 185, 45, 0.42); transform: translateY(-3px); filter: saturate(1.12); }
+    div[data-testid="stButton"] > button:focus, div[data-testid="stButton"] > button:active { color: #061426 !important; border: 0 !important; box-shadow: 0 0 0 0.2rem rgba(212, 160, 23, 0.34), 0 16px 32px rgba(212, 160, 23, 0.34) !important; }
+    h1, h2, h3, .stHeader { color: var(--phima-white) !important; }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Dental Radiology Platform · v0.2</div><h1 class="phima-title">PHIMA</h1><div class="phima-subtitle">Workflow interpretasi radiografi panoramik bertahap dengan konfirmasi percakapan, tanpa dropdown.</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -216,8 +225,8 @@ st.markdown("""
 <div class="phima-card"><strong>Instruksi:</strong> Isi tiap tahap dengan bahasa klinis singkat atau shorthand PHIMA. Setelah tiap input, lakukan konfirmasi untuk melihat ringkasan formal sebelum melanjutkan.</div>
 """, unsafe_allow_html=True)
 
-st.markdown('<h2 class="phima-stage">STAGE 1 — GIGI</h2>', unsafe_allow_html=True)
-st.caption("Masukkan temuan: jumlah gigi, gigi hilang/edentulous, impaksi, karies PR/PIR, nekrosis pulpa, gangren radiks, abses periapikal, tambalan TD/TP, crowding/diastema, dan periodontal findings.")
+st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 1 — GIGI</h2>', unsafe_allow_html=True)
+st.markdown('<div class="phima-description">Masukkan temuan radiografis mengenai jumlah dan distribusi gigi, area edentulous, impaksi, karies PR/PIR, nekrosis pulpa, gangren radiks, abses periapikal, restorasi TD/TP, crowding/diastema, serta status periodontal.</div>', unsafe_allow_html=True)
 stage_1 = st.text_area("Input temuan gigi", height=170, placeholder="Contoh: Jumlah gigi 28. 18 IM H PE B kanalis. 36 PIR AP. 46 TD. ED 14, 15. PG ringan.", key="stage_1")
 if st.button("Konfirmasi Tahap 1", type="primary"):
     st.session_state.stage_1_confirmed = True
@@ -230,8 +239,8 @@ if st.session_state.stage_1_confirmed:
         st.session_state.stage_2_visible = True
 
 if st.session_state.get("stage_2_visible"):
-    st.markdown('<h2 class="phima-stage">STAGE 2 — MANDIBULA, MAKSILA, SINUS MAKSILARIS</h2>', unsafe_allow_html=True)
-    st.caption("Masukkan temuan: mandibula, maksila, sinus maksilaris, kanalis mandibularis, alveolar crest, lesi tulang, dan relasi akar gigi impaksi dengan sinus atau kanalis.")
+    st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 2 — MANDIBULA, MAKSILA, SINUS MAKSILARIS</h2>', unsafe_allow_html=True)
+    st.markdown('<div class="phima-description">Masukkan temuan radiografis pada mandibula, maksila, sinus maksilaris, kanalis mandibularis, alveolar crest, lesi tulang, serta hubungan gigi impaksi terhadap struktur anatomi sekitar.</div>', unsafe_allow_html=True)
     stage_2 = st.text_area("Input temuan mandibula, maksila, dan sinus maksilaris", height=170, placeholder="Contoh: Mandibula dan maksila DBN. Sinus maksilaris kanan-kiri DBN. Akar 18 superimpose dengan sinus maksilaris.", key="stage_2")
     if st.button("Konfirmasi Tahap 2", type="primary"):
         st.session_state.stage_2_confirmed = True
@@ -242,8 +251,8 @@ if st.session_state.get("stage_2_visible"):
             st.session_state.stage_3_visible = True
 
 if st.session_state.get("stage_3_visible"):
-    st.markdown('<h2 class="phima-stage">STAGE 3 — TMJ</h2>', unsafe_allow_html=True)
-    st.caption("Masukkan temuan: kondilus kanan, kondilus kiri, posisi/asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, dan cortical thickening.")
+    st.markdown('<h2 class="phima-stage">Konfirmasi Tahap 3 — TMJ</h2>', unsafe_allow_html=True)
+    st.markdown('<div class="phima-description">Masukkan evaluasi radiografis TMJ meliputi kondilus kanan dan kiri, posisi atau asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, serta penebalan kortikal.</div>', unsafe_allow_html=True)
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
     if st.button("Generate Final PHIMA Report", type="primary"):
         st.session_state.final_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3)
