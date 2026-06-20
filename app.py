@@ -12,6 +12,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
+APP_VERSION_LABEL = "PHIMA v0.3.1 — Auto-Save Final Report Workflow"
+
+
 TMJ_NORMAL_WORDING = (
     "Relasi kondilus, fossa, dan eminensia artikularis tampak dalam batas normal radiografis. "
     "Tidak tampak gambaran osteoartritis, remodeling patologis, maupun penebalan kortikal abnormal."
@@ -206,7 +209,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.2.3 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.1 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -286,7 +289,7 @@ def set_report_status(status: str) -> None:
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
-    """
+    f"""
     <style>
     :root { --phima-navy: #061426; --phima-blue: #0B1F3A; --phima-gold: #D4A017; --phima-gold-hover: #F0B92D; --phima-white: #FFFFFF; --phima-ink: #EAF2FF; --phima-muted: #B9C7DA; --phima-green-bg: rgba(14, 86, 55, 0.94); --phima-green-border: #31D782; --phima-green-text: #C8FFD9; }
     .stApp { background: radial-gradient(circle at top left, rgba(21, 62, 110, 0.6), transparent 34rem), linear-gradient(180deg, #061426 0%, #081A30 42%, #06101F 100%); color: var(--phima-ink); }
@@ -318,13 +321,13 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2.3 — Template Engine</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · {APP_VERSION_LABEL}</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("PHIMA v0.2.3 — Template Engine")
+    st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.divider()
     st.subheader("Ekspansi Singkatan")
@@ -420,9 +423,13 @@ if "ai_report_text" in st.session_state:
         "Final Corrected Report",
         height=360,
         key="corrected_report_editor",
-        help="Primary final report field for copying and future saving.",
+        help="Primary final report field. Edits are auto-saved as the main final report output.",
     )
     st.session_state.corrected_report_text = corrected_report_text
+    st.session_state.final_corrected_report = corrected_report_text
+    if status != "Final Report Ready":
+        set_report_status("Corrected by Radiologist")
+    st.caption("Auto-save aktif: perubahan pada Final Corrected Report langsung tersimpan sebagai output utama.")
 
     col_update, col_copy = st.columns(2)
     with col_update:
