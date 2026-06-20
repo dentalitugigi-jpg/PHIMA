@@ -786,6 +786,8 @@ st.markdown(
     [data-testid="stSidebar"] { background: linear-gradient(180deg, #061426 0%, #0B1F3A 55%, #0E2B4A 100%); border-right: 1px solid rgba(212, 160, 23, 0.28); }
     [data-testid="stSidebar"] * { color: var(--phima-white) !important; }
     [data-testid="stSidebar"] code { color: var(--phima-navy) !important; background-color: rgba(255, 255, 255, 0.92) !important; }
+    [data-testid="stSidebar"] [data-testid="stExpander"] div[data-testid="stButton"] { justify-content: flex-start; margin: 0.35rem 0 0.25rem; }
+    [data-testid="stSidebar"] [data-testid="stExpander"] div[data-testid="stButton"] > button { min-height: 2.15rem; min-width: 0; padding: 0.35rem 0.9rem !important; border-radius: 10px !important; font-size: 0.88rem !important; box-shadow: none; }
     .phima-hero { background: linear-gradient(135deg, rgba(6, 20, 38, 0.98) 0%, rgba(13, 47, 86, 0.96) 56%, rgba(7, 26, 48, 0.98) 100%); border-radius: 30px; padding: 3rem 3.2rem; margin-bottom: 2rem; box-shadow: 0 26px 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08); border: 1px solid rgba(212, 160, 23, 0.42); position: relative; overflow: hidden; }
     .phima-hero::after { content: ""; position: absolute; inset: auto -8rem -11rem auto; width: 26rem; height: 26rem; background: radial-gradient(circle, rgba(212,160,23,0.28), transparent 68%); }
     .phima-eyebrow { color: var(--phima-gold); font-size: 0.98rem; font-weight: 900; letter-spacing: 0.22em; margin-bottom: 0.8rem; text-transform: uppercase; }
@@ -821,29 +823,28 @@ if "admin_authenticated" not in st.session_state:
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
     st.markdown("SQLite Clinical Bank")
-    st.markdown("Admin Database available")
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
     st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
-    st.subheader("Admin Database")
-    if st.session_state["admin_authenticated"]:
-        st.success("Dashboard admin terbuka.")
-        if st.button("Keluar Admin", key="admin_logout_button"):
-            st.session_state["admin_authenticated"] = False
-    else:
-        admin_password = st.text_input("Password Admin", type="password", key="admin_password_input")
-        if st.button("Masuk Admin", key="admin_login_button"):
-            if admin_password == get_admin_password():
-                st.session_state["admin_authenticated"] = True
-                st.success("Dashboard admin terbuka.")
-            else:
-                st.session_state["admin_authenticated"] = False
-                st.error("Password admin tidak sesuai.")
-    st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
         st.markdown(f"- **{code}** = {meaning}")
+    st.divider()
+    with st.expander("🔒 Admin", expanded=False):
+        if st.session_state["admin_authenticated"]:
+            st.caption("Admin aktif")
+            if st.button("Keluar", key="admin_logout_button"):
+                st.session_state["admin_authenticated"] = False
+        else:
+            admin_password = st.text_input("Password Admin", type="password", key="admin_password_input")
+            if st.button("Masuk", key="admin_login_button"):
+                if admin_password == get_admin_password():
+                    st.session_state["admin_authenticated"] = True
+                    st.success("Dashboard admin terbuka.")
+                else:
+                    st.session_state["admin_authenticated"] = False
+                    st.error("Password admin tidak sesuai.")
 
 if st.session_state["admin_authenticated"] is True:
     render_admin_database_dashboard()
