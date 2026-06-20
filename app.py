@@ -5,11 +5,20 @@ Dental panoramic guided interpretation and shorthand-to-report generator.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import sqlite3
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+
+APP_VERSION_LABEL = "PHIMA v0.3.1 — Auto-Save Final Report Workflow"
+DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
 TMJ_NORMAL_WORDING = (
@@ -188,6 +197,122 @@ def set_report_status(status: str) -> None:
     st.session_state.report_status = status
 
 
+def utc_timestamp() -> str:
+    """Return an ISO-8601 UTC timestamp for PHIMA database records."""
+
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def report_hash(report_text: str) -> str:
+    """Return a stable hash used to prevent duplicate final-report saves."""
+
+    return hashlib.sha256(report_text.encode("utf-8")).hexdigest()
+
+
+def init_cases_table() -> None:
+    """Create or migrate the PHIMA cases table used by the auto-save workflow."""
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cases (
+                case_id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                user_name TEXT,
+                report_template TEXT,
+                stage_1_findings TEXT,
+                stage_2_findings TEXT,
+                stage_3_findings TEXT,
+                generated_ai_report TEXT,
+                final_corrected_report TEXT,
+                radiodiagnosis TEXT,
+                notes TEXT,
+                report_status TEXT NOT NULL
+            )
+            """
+        )
+        existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(cases)")}
+        required_columns = {
+            "case_id": "TEXT PRIMARY KEY",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
+            "user_name": "TEXT",
+            "report_template": "TEXT",
+            "stage_1_findings": "TEXT",
+            "stage_2_findings": "TEXT",
+            "stage_3_findings": "TEXT",
+            "generated_ai_report": "TEXT",
+            "final_corrected_report": "TEXT",
+            "radiodiagnosis": "TEXT",
+            "notes": "TEXT",
+            "report_status": "TEXT",
+        }
+        for column, definition in required_columns.items():
+            if column not in existing_columns and column != "case_id":
+                connection.execute(f"ALTER TABLE cases ADD COLUMN {column} {definition}")
+
+
+def save_case_to_database() -> bool:
+    """Insert or update the current case when the final corrected report is ready."""
+
+    final_report = st.session_state.get("corrected_report_text", "")
+    current_hash = report_hash(final_report)
+    if st.session_state.get("last_saved_final_report_hash") == current_hash:
+        return False
+
+    init_cases_table()
+    now = utc_timestamp()
+    case_id = st.session_state.setdefault("case_id", str(uuid.uuid4()))
+    created_at = st.session_state.setdefault("case_created_at", now)
+    payload = {
+        "case_id": case_id,
+        "created_at": created_at,
+        "updated_at": now,
+        "user_name": st.session_state.get("user_name", ""),
+        "report_template": st.session_state.get("report_template", "Panoramic Radiology Report"),
+        "stage_1_findings": st.session_state.get("stage_1", ""),
+        "stage_2_findings": st.session_state.get("stage_2", ""),
+        "stage_3_findings": st.session_state.get("stage_3", ""),
+        "generated_ai_report": st.session_state.get("generated_ai_report_original", st.session_state.get("ai_report_text", "")),
+        "final_corrected_report": final_report,
+        "radiodiagnosis": st.session_state.get("radiodiagnosis", ""),
+        "notes": st.session_state.get("case_notes", ""),
+        "report_status": "Final Report Ready",
+    }
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            INSERT INTO cases (
+                case_id, created_at, updated_at, user_name, report_template,
+                stage_1_findings, stage_2_findings, stage_3_findings, generated_ai_report,
+                final_corrected_report, radiodiagnosis, notes, report_status
+            ) VALUES (
+                :case_id, :created_at, :updated_at, :user_name, :report_template,
+                :stage_1_findings, :stage_2_findings, :stage_3_findings, :generated_ai_report,
+                :final_corrected_report, :radiodiagnosis, :notes, :report_status
+            )
+            ON CONFLICT(case_id) DO UPDATE SET
+                updated_at=excluded.updated_at,
+                user_name=excluded.user_name,
+                report_template=excluded.report_template,
+                stage_1_findings=excluded.stage_1_findings,
+                stage_2_findings=excluded.stage_2_findings,
+                stage_3_findings=excluded.stage_3_findings,
+                generated_ai_report=excluded.generated_ai_report,
+                final_corrected_report=excluded.final_corrected_report,
+                radiodiagnosis=excluded.radiodiagnosis,
+                notes=excluded.notes,
+                report_status=excluded.report_status
+            """,
+            payload,
+        )
+    st.session_state.last_saved_final_report_hash = current_hash
+    st.session_state.last_saved_at = now
+    return True
+
+
+init_cases_table()
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
@@ -220,14 +345,16 @@ st.markdown(
     div[data-testid="stButton"] > button:focus, div[data-testid="stButton"] > button:active { color: #061426 !important; border: 0 !important; box-shadow: 0 0 0 0.2rem rgba(212, 160, 23, 0.34), 0 16px 32px rgba(212, 160, 23, 0.34) !important; }
     h1, h2, h3, .stHeader { color: var(--phima-white) !important; }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2.1</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · PHIMA v0.3.1 — Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("PHIMA v0.2.1")
+    st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
+    st.text_input("User name", key="user_name", placeholder="Nama radiolog / operator")
+    st.selectbox("Selected template", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
@@ -272,6 +399,7 @@ if st.session_state.get("stage_3_visible"):
     if st.button("Generate Final PHIMA Report", type="primary"):
         st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3)
         st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
+        st.session_state.generated_ai_report_original = st.session_state.ai_report_text
         st.session_state.corrected_report_text = st.session_state.ai_report_text
         st.session_state.final_corrected_report = st.session_state.corrected_report_text
         st.session_state.ai_report_editor = st.session_state.ai_report_text
@@ -280,21 +408,13 @@ if st.session_state.get("stage_3_visible"):
 
 if "ai_report_text" in st.session_state:
     st.header("Radiologist Correction Workflow")
-    status = st.session_state.get("report_status", "Draft AI Report")
-    status_steps = ["Draft AI Report", "Corrected by Radiologist", "Final Report Ready"]
-    status_markup = "".join(
-        f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
-        for step in status_steps
-    )
-    st.markdown(f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>', unsafe_allow_html=True)
-
-    ai_report_text = st.text_area(
+    st.text_area(
         "Generated AI Report",
-        height=360,
-        key="ai_report_editor",
-        help="Editable AI-generated draft. Changes here do not replace the final corrected report until copied manually by the radiologist.",
+        value=st.session_state.get("generated_ai_report_original", st.session_state.get("ai_report_text", "")),
+        height=260,
+        disabled=True,
+        help="Original AI-generated draft saved separately from the final corrected report.",
     )
-    st.session_state.ai_report_text = ai_report_text
 
     corrected_report_text = st.text_area(
         "Final Corrected Report",
@@ -303,13 +423,33 @@ if "ai_report_text" in st.session_state:
         help="Primary final report field for copying and future saving.",
     )
     st.session_state.corrected_report_text = corrected_report_text
+    if corrected_report_text != st.session_state.get("final_corrected_report", ""):
+        st.session_state.final_corrected_report = corrected_report_text
+        if st.session_state.get("last_saved_final_report_hash") != report_hash(corrected_report_text):
+            set_report_status("Corrected by Radiologist")
 
-    col_update, col_copy = st.columns(2)
-    with col_update:
-        if st.button("Update Final Report", type="primary"):
+
+    status = st.session_state.get("report_status", "Draft AI Report")
+    status_steps = ["Draft AI Report", "Corrected by Radiologist", "Final Report Ready"]
+    status_markup = "".join(
+        f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
+        for step in status_steps
+    )
+    st.markdown(f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>', unsafe_allow_html=True)
+
+    st.text_input("Suspek Radiodiagnosis", key="radiodiagnosis", placeholder="Ringkasan radiodiagnosis untuk database dan analytics")
+    st.text_area("Notes", key="case_notes", height=110, placeholder="Catatan internal tambahan")
+
+    col_ready, col_copy = st.columns(2)
+    with col_ready:
+        if st.button("Final Report Ready", type="primary"):
             st.session_state.final_corrected_report = st.session_state.corrected_report_text
             set_report_status("Final Report Ready")
-            st.rerun()
+            saved = save_case_to_database()
+            if saved:
+                st.success("Final report ready and automatically saved to PHIMA Bank Data.")
+            else:
+                st.info("Final report is already saved to PHIMA Bank Data. Edit the Final Corrected Report to update the saved case.")
     with col_copy:
         final_report_for_copy = st.session_state.get("final_corrected_report", st.session_state.corrected_report_text)
         st.download_button(
