@@ -9,15 +9,17 @@ import hashlib
 import re
 import sqlite3
 import uuid
+from io import BytesIO
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 import streamlit.components.v1 as components
 
 
-APP_VERSION_LABEL = "PHIMA v0.3.2 — Indonesian Clinical Workflow"
+APP_VERSION_LABEL = "PHIMA v0.3.3 — Admin Database Dashboard"
 DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
@@ -250,7 +252,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.3.2 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.3 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -398,6 +400,136 @@ def init_cases_table() -> None:
                 connection.execute(f"ALTER TABLE cases ADD COLUMN {column} {definition}")
 
 
+
+def get_admin_password() -> str:
+    """Return the configured admin password with a safe PHIMA default fallback."""
+
+    try:
+        return str(st.secrets["admin_password"])
+    except (KeyError, FileNotFoundError, StreamlitSecretNotFoundError):
+        return "PHIMA2026"
+
+
+def fetch_cases(search_query: str = "", limit: int | None = None) -> list[sqlite3.Row]:
+    """Fetch PHIMA cases for the authenticated admin dashboard."""
+
+    init_cases_table()
+    sql = """
+        SELECT case_id, created_at, updated_at, user_name, report_template,
+               stage_1_findings, stage_2_findings, stage_3_findings, generated_ai_report,
+               final_corrected_report, radiodiagnosis, notes, report_status
+        FROM cases
+    """
+    params: list[str | int] = []
+    if search_query.strip():
+        pattern = f"%{search_query.strip()}%"
+        sql += """
+            WHERE user_name LIKE ?
+               OR radiodiagnosis LIKE ?
+               OR report_template LIKE ?
+               OR created_at LIKE ?
+               OR updated_at LIKE ?
+        """
+        params.extend([pattern, pattern, pattern, pattern, pattern])
+    sql += " ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        return list(connection.execute(sql, params))
+
+
+def count_cases_where(where_clause: str = "", params: tuple[str, ...] = ()) -> int:
+    """Return a case count for a dashboard filter."""
+
+    init_cases_table()
+    sql = "SELECT COUNT(*) FROM cases"
+    if where_clause:
+        sql += f" WHERE {where_clause}"
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        return int(connection.execute(sql, params).fetchone()[0])
+
+
+def get_database_overview() -> dict[str, str | int]:
+    """Calculate aggregate database metrics for authenticated admins only."""
+
+    today_prefix = datetime.now(timezone.utc).date().isoformat()
+    all_cases = fetch_cases(limit=None)
+    diagnosis_counts: dict[str, int] = {}
+    template_counts = {"adult": 0, "pediatric": 0, "orthodontic": 0, "impaction": 0, "tmj": 0}
+    for case in all_cases:
+        diagnosis = (case["radiodiagnosis"] or "").strip()
+        if diagnosis:
+            diagnosis_counts[diagnosis] = diagnosis_counts.get(diagnosis, 0) + 1
+        template = (case["report_template"] or "").lower()
+        if "anak" in template or "pediatric" in template:
+            template_counts["pediatric"] += 1
+        elif "ortho" in template:
+            template_counts["orthodontic"] += 1
+        elif "impaksi" in template or "impaction" in template:
+            template_counts["impaction"] += 1
+        elif "tmj" in template:
+            template_counts["tmj"] += 1
+        else:
+            template_counts["adult"] += 1
+    most_common = max(diagnosis_counts.items(), key=lambda item: item[1])[0] if diagnosis_counts else "Belum ada data"
+    most_recent = all_cases[0]["updated_at"] if all_cases else "Belum ada data"
+    return {
+        "Total Cases Saved": len(all_cases),
+        "Total Cases Today": count_cases_where("date(created_at) = ?", (today_prefix,)),
+        "Total Adult Cases": template_counts["adult"],
+        "Total Pediatric Cases": template_counts["pediatric"],
+        "Total Orthodontic Cases": template_counts["orthodontic"],
+        "Total Impaction Cases": template_counts["impaction"],
+        "Total TMJ Cases": template_counts["tmj"],
+        "Most Recent Saved Case": most_recent,
+        "Most Common Radiodiagnosis": most_common,
+    }
+
+
+def cases_to_csv(cases: list[sqlite3.Row]) -> bytes:
+    """Serialize cases to UTF-8 CSV bytes without requiring optional dependencies."""
+
+    import csv
+    from io import StringIO
+
+    output = StringIO()
+    fieldnames = list(cases[0].keys()) if cases else [
+        "case_id", "created_at", "updated_at", "user_name", "report_template",
+        "stage_1_findings", "stage_2_findings", "stage_3_findings", "generated_ai_report",
+        "final_corrected_report", "radiodiagnosis", "notes", "report_status",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for case in cases:
+        writer.writerow(dict(case))
+    return output.getvalue().encode("utf-8-sig")
+
+
+def cases_to_excel(cases: list[sqlite3.Row]) -> bytes:
+    """Serialize cases to an Excel workbook for admin export."""
+
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "PHIMA Cases"
+    headers = list(cases[0].keys()) if cases else ["case_id", "created_at", "updated_at", "user_name", "report_template", "radiodiagnosis", "report_status"]
+    sheet.append(headers)
+    for case in cases:
+        sheet.append([case[header] for header in headers])
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def delete_case(case_id: str) -> None:
+    """Delete one PHIMA case by id after explicit admin confirmation."""
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute("DELETE FROM cases WHERE case_id = ?", (case_id,))
+
 def save_case_to_database() -> bool:
     """Insert or update the current case when the final corrected report is ready."""
 
@@ -415,7 +547,7 @@ def save_case_to_database() -> bool:
         "created_at": created_at,
         "updated_at": now,
         "user_name": st.session_state.get("user_name", ""),
-        "report_template": st.session_state.get("report_template", "Panoramic Radiology Report"),
+        "report_template": REPORT_TEMPLATES.get(st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY), REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY]).label,
         "stage_1_findings": st.session_state.get("stage_1", ""),
         "stage_2_findings": st.session_state.get("stage_2", ""),
         "stage_3_findings": st.session_state.get("stage_3", ""),
@@ -457,6 +589,101 @@ def save_case_to_database() -> bool:
     return True
 
 
+
+def render_admin_database_dashboard() -> None:
+    """Render the authenticated database dashboard and management tools."""
+
+    st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">=== DATABASE OVERVIEW ===</span><span class="phima-stage-title">ADMIN DATABASE DASHBOARD</span></h2>', unsafe_allow_html=True)
+    overview = get_database_overview()
+    metric_columns = st.columns(3)
+    for index, (label, value) in enumerate(overview.items()):
+        metric_columns[index % 3].metric(label, value)
+    st.markdown('<div class="phima-card"><strong>==========================</strong></div>', unsafe_allow_html=True)
+
+    all_cases = fetch_cases(limit=None)
+    st.subheader("Export")
+    export_col_1, export_col_2, export_col_3 = st.columns(3)
+    with export_col_1:
+        if DATABASE_PATH.exists():
+            st.download_button(
+                "📥 Unduh SQLite Database",
+                data=DATABASE_PATH.read_bytes(),
+                file_name="phima_bank_data.sqlite3",
+                mime="application/vnd.sqlite3",
+                type="primary",
+            )
+    with export_col_2:
+        st.download_button("📥 Unduh CSV", data=cases_to_csv(all_cases), file_name="phima_cases.csv", mime="text/csv", type="primary")
+    with export_col_3:
+        st.download_button(
+            "📥 Unduh Excel",
+            data=cases_to_excel(all_cases),
+            file_name="phima_cases.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+        )
+
+    st.subheader("Case Table — latest 50 cases")
+    search_query = st.text_input("Search database", placeholder="Search doctor name, radiodiagnosis, template, or date", key="admin_case_search")
+    latest_cases = fetch_cases(search_query=search_query, limit=50)
+    table_rows = [
+        {
+            "Date": case["created_at"],
+            "Nama Dokter": case["user_name"],
+            "Template": case["report_template"],
+            "Radiodiagnosis": case["radiodiagnosis"],
+            "Status": case["report_status"],
+        }
+        for case in latest_cases
+    ]
+    st.dataframe(table_rows, use_container_width=True, hide_index=True)
+
+    for case in latest_cases:
+        title = f"{case['created_at']} — {case['user_name'] or 'Tanpa nama dokter'} — {case['radiodiagnosis'] or 'Tanpa radiodiagnosis'}"
+        with st.expander(f"Lihat Detail: {title}"):
+            st.markdown("**Stage 1 Findings**")
+            st.text(case["stage_1_findings"] or "-")
+            st.markdown("**Stage 2 Findings**")
+            st.text(case["stage_2_findings"] or "-")
+            st.markdown("**Stage 3 Findings**")
+            st.text(case["stage_3_findings"] or "-")
+            st.markdown("**Generated AI Report**")
+            st.text(case["generated_ai_report"] or "-")
+            st.markdown("**Final Corrected Report**")
+            st.text(case["final_corrected_report"] or "-")
+            st.markdown("**Notes**")
+            st.text(case["notes"] or "-")
+            st.markdown(f"**Timestamp:** {case['updated_at']}")
+            confirm = st.checkbox("Saya yakin ingin menghapus kasus ini", key=f"confirm_delete_{case['case_id']}")
+            if st.button("🗑 Hapus Kasus", key=f"delete_{case['case_id']}", disabled=not confirm):
+                delete_case(case["case_id"])
+                st.success("Kasus telah dihapus.")
+                st.rerun()
+
+    st.subheader("Statistics")
+    template_counts = {label: 0 for label in ["Adult", "Pediatric", "Orthodontic", "Impaction", "TMJ"]}
+    diagnosis_counts: dict[str, int] = {}
+    for case in all_cases:
+        template = (case["report_template"] or "").lower()
+        if "anak" in template or "pediatric" in template:
+            template_counts["Pediatric"] += 1
+        elif "ortho" in template:
+            template_counts["Orthodontic"] += 1
+        elif "impaksi" in template or "impaction" in template:
+            template_counts["Impaction"] += 1
+        elif "tmj" in template:
+            template_counts["TMJ"] += 1
+        else:
+            template_counts["Adult"] += 1
+        diagnosis = (case["radiodiagnosis"] or "").strip()
+        if diagnosis:
+            diagnosis_counts[diagnosis] = diagnosis_counts.get(diagnosis, 0) + 1
+    st.markdown("**Cases per template**")
+    st.bar_chart(template_counts)
+    st.markdown("**Top 10 most common radiodiagnosis**")
+    top_diagnoses = sorted(diagnosis_counts.items(), key=lambda item: item[1], reverse=True)[:10]
+    st.dataframe([{"Radiodiagnosis": diagnosis, "Total": total} for diagnosis, total in top_diagnoses], use_container_width=True, hide_index=True)
+
 init_cases_table()
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
@@ -493,7 +720,7 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.2 Indonesian Clinical Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.3 Admin Database Dashboard</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -504,9 +731,24 @@ with st.sidebar:
     st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
     st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
+    if st.button("🔒 Admin Database", key="show_admin_database"):
+        st.session_state.show_admin_database = True
+    if st.session_state.get("show_admin_database"):
+        admin_password = st.text_input("Password Admin", type="password", key="admin_password_input")
+        if admin_password:
+            if admin_password == get_admin_password():
+                st.session_state.admin_authenticated = True
+                st.success("Admin dashboard unlocked.")
+            else:
+                st.session_state.admin_authenticated = False
+                st.error("Password admin tidak sesuai.")
+    st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
         st.markdown(f"- **{code}** = {meaning}")
+
+if st.session_state.get("admin_authenticated"):
+    render_admin_database_dashboard()
 
 for key, initial in {"stage_1_confirmed": False, "stage_2_visible": False, "stage_2_confirmed": False, "stage_3_visible": False}.items():
     st.session_state.setdefault(key, initial)
