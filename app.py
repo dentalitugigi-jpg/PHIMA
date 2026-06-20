@@ -17,7 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
-APP_VERSION_LABEL = "PHIMA v0.3.2 — Indonesian Clinical Workflow"
+APP_VERSION_LABEL = "PHIMA v0.3.3 — Admin Database Dashboard"
 DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
@@ -250,7 +250,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.3.2 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.3 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -410,12 +410,16 @@ def save_case_to_database() -> bool:
     now = utc_timestamp()
     case_id = st.session_state.setdefault("case_id", str(uuid.uuid4()))
     created_at = st.session_state.setdefault("case_created_at", now)
+    selected_template = REPORT_TEMPLATES.get(
+        st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY),
+        REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY],
+    )
     payload = {
         "case_id": case_id,
         "created_at": created_at,
         "updated_at": now,
         "user_name": st.session_state.get("user_name", ""),
-        "report_template": st.session_state.get("report_template", "Panoramic Radiology Report"),
+        "report_template": selected_template.label,
         "stage_1_findings": st.session_state.get("stage_1", ""),
         "stage_2_findings": st.session_state.get("stage_2", ""),
         "stage_3_findings": st.session_state.get("stage_3", ""),
@@ -493,16 +497,31 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.2 Indonesian Clinical Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.3 Admin Database Dashboard • Indonesian Clinical Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
+
+st.session_state.setdefault("selected_template", DEFAULT_TEMPLATE_KEY)
 
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
-    st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
+    template_keys = list(REPORT_TEMPLATES.keys())
+    current_template_key = st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY)
+    if current_template_key not in REPORT_TEMPLATES:
+        current_template_key = DEFAULT_TEMPLATE_KEY
+    selected_template_label = st.selectbox(
+        "Template Laporan",
+        [REPORT_TEMPLATES[key].label for key in template_keys],
+        index=template_keys.index(current_template_key),
+        key="selected_template_label",
+    )
+    st.session_state.selected_template = next(
+        key for key, template in REPORT_TEMPLATES.items() if template.label == selected_template_label
+    )
+    st.caption("Template aktif menentukan struktur interpretasi final.")
     st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
@@ -510,30 +529,10 @@ with st.sidebar:
 
 for key, initial in {"stage_1_confirmed": False, "stage_2_visible": False, "stage_2_confirmed": False, "stage_3_visible": False}.items():
     st.session_state.setdefault(key, initial)
-st.session_state.setdefault("selected_template", DEFAULT_TEMPLATE_KEY)
 
 st.markdown("""
 <div class="phima-card"><strong>Instruksi:</strong> Isi tiap tahap menggunakan bahasa klinis singkat atau ekspansi singkatan radiologi yang sesuai. Setelah tiap input, lakukan konfirmasi untuk melihat ringkasan formal sebelum melanjutkan.</div>
 """, unsafe_allow_html=True)
-
-st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Jenis Template Laporan</span><span class="phima-stage-title">TEMPLATE ENGINE</span></h2>', unsafe_allow_html=True)
-st.markdown('<div class="phima-description">Pilih gaya laporan sesuai tipe kasus klinis sebelum report generation. Template laporan terpilih akan memengaruhi struktur laporan final dan tetap dapat diedit pada correction layer.</div>', unsafe_allow_html=True)
-template_labels = [template.label for template in REPORT_TEMPLATES.values()]
-current_template = REPORT_TEMPLATES.get(st.session_state.selected_template, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
-selected_label = st.radio(
-    "Jenis Template Laporan",
-    template_labels,
-    index=template_labels.index(current_template.label),
-    key="selected_template_label",
-)
-st.session_state.selected_template = next(
-    key for key, template in REPORT_TEMPLATES.items() if template.label == selected_label
-)
-selected_template = REPORT_TEMPLATES[st.session_state.selected_template]
-st.markdown(
-    f'<div class="phima-card"><strong>Template laporan terpilih:</strong> {selected_template.label}<br>{selected_template.description}</div>',
-    unsafe_allow_html=True,
-)
 
 st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 1</span><span class="phima-stage-title">GIGI</span></h2>', unsafe_allow_html=True)
 st.markdown('<div class="phima-description">Masukkan temuan radiografis mengenai jumlah dan distribusi gigi, area edentulous, impaksi, karies PR/PIR, nekrosis pulpa, gangren radiks, abses periapikal, restorasi TD/TP, crowding/diastema, serta status periodontal.</div>', unsafe_allow_html=True)
@@ -564,8 +563,6 @@ if st.session_state.get("stage_3_visible"):
     st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 3</span><span class="phima-stage-title">TMJ</span></h2>', unsafe_allow_html=True)
     st.markdown('<div class="phima-description">Masukkan evaluasi radiografis TMJ meliputi kondilus kanan dan kiri, posisi atau asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, serta penebalan kortikal.</div>', unsafe_allow_html=True)
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
-    selected_template = REPORT_TEMPLATES[st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY)]
-    st.markdown(f'<div class="phima-card"><strong>Template sebelum report generation:</strong> {selected_template.label}</div>', unsafe_allow_html=True)
     if st.button("Buat Interpretasi PHIMA", type="primary"):
         st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3, st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY))
         st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
