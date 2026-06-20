@@ -24,6 +24,7 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "D": "distoangular",
     "V": "vertikal",
     "PE": "partial erupsi",
+    "T": "Terbenam",
     "B": "bersinggungan",
     "S": "superimpose",
     "PR": "pulpitis reversible",
@@ -33,13 +34,17 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "GR": "gangren radiks",
     "ED": "edentulous",
     "PG": "periodontitis generalisata",
+    "PKL": "Periodontitis Kronis Lokalisata",
+    "PKG": "Periodontitis Kronis Generalisata",
+    "NF": "Nekrosis pulpa gigi dengan apikal akar tampak mengalami resorpsi fisiologis",
+    "PB": "Persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis",
     "TD": "tambalan sampai dentin",
     "TP": "tambalan sampai kamar pulpa",
     "DBN": "dalam batas normal radiografis",
 }
 
 TOKEN_RE = re.compile(
-    r"\b(DBN|PIR|CROWDING|PE|PR|NP|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|B|S)\b", re.IGNORECASE
+    r"\b(DBN|PIR|CROWDING|PKL|PKG|PE|PR|NP|NF|PB|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|T|B|S)\b", re.IGNORECASE
 )
 TOOTH_RE = re.compile(r"\b(?:[1-4][1-8]|[5-8][1-5])\b")
 
@@ -62,7 +67,7 @@ REPORT_TEMPLATES: dict[str, ReportTemplate] = {
     "pediatric": ReportTemplate(
         "pediatric",
         "Anak — Mixed Dentition",
-        "Format lebih singkat dan fokus untuk gigi sulung, gigi permanen, persistensi gigi sulung, resorpsi fisiologis akar, benih gigi permanen, karies, gangren radiks, nekrosis pulpa, serta pulpitis.",
+        "Format lebih singkat dan fokus untuk gigi sulung, gigi permanen, persistensi gigi sulung dengan apikal akar normal, nekrosis pulpa dengan resorpsi fisiologis, benih gigi permanen, karies, gangren radiks, nekrosis pulpa, serta pulpitis.",
     ),
     "ortho": ReportTemplate(
         "ortho",
@@ -72,7 +77,7 @@ REPORT_TEMPLATES: dict[str, ReportTemplate] = {
     "impaction": ReportTemplate(
         "impaction",
         "Impaksi — Fokus M3",
-        "Fokus impaksi molar tiga 18, 28, 38, 48, termasuk posisi impaksi, partial erupsi/terbenam/perikoronitis bila tertulis, serta relasi akar terhadap sinus maksilaris atau kanalis mandibularis tanpa mengarang relasi yang tidak dituliskan.",
+        "Fokus impaksi molar tiga 18, 28, 38, 48, termasuk posisi impaksi, partial erupsi/terbenam/perikoronitis, periodontitis kronis lokalisata/generalisata bila tertulis, serta relasi akar terhadap sinus maksilaris atau kanalis mandibularis tanpa mengarang relasi yang tidak dituliskan.",
     ),
     "tmj": ReportTemplate(
         "tmj",
@@ -104,6 +109,7 @@ ABBREVIATIONS: dict[str, Finding] = {
     "D": Finding("Arah gigi impaksi tampak distoangular.", "Impaksi gigi posisi distoangular.", "Evaluasi bedah mulut dan korelasi klinis."),
     "V": Finding("Arah gigi impaksi tampak vertikal.", "Impaksi gigi posisi vertikal.", "Evaluasi potensi erupsi dan kebutuhan perawatan."),
     "PE": Finding("Tampak partial erupsi pada gigi terkait.", "Status partial erupsi.", "Korelasi klinis terhadap jaringan lunak perikoronal."),
+    "T": Finding("Gigi terkait tampak terbenam.", "Terbenam.", "Evaluasi relasi gigi terbenam terhadap struktur anatomis sekitar."),
     "B": Finding("Tampak relasi bersinggungan dengan struktur anatomis sekitar.", "Relasi anatomis dekat/bersinggungan.", "Pertimbangkan evaluasi radiografis lanjutan bila indikatif."),
     "S": Finding("Tampak superimpose dengan struktur anatomis sekitar.", "Superimposisi radiografis.", "Pertimbangkan proyeksi atau modalitas tambahan bila diperlukan."),
     "PR": Finding("Tampak gambaran karies yang secara klinis dapat berkaitan dengan pulpitis reversible.", "Suspek pulpitis reversible.", "Evaluasi klinis, tes vitalitas, dan perawatan restoratif."),
@@ -113,6 +119,10 @@ ABBREVIATIONS: dict[str, Finding] = {
     "GR": Finding("Tampak sisa akar/gangren radiks pada regio terkait.", "Suspek gangren radiks.", "Evaluasi prognosis; pertimbangkan ekstraksi bila tidak dapat dipertahankan."),
     "ED": Finding("Tampak area edentulous pada regio terkait.", "Status edentulous.", "Pertimbangkan rehabilitasi prostodontik sesuai kondisi jaringan pendukung."),
     "PG": Finding("Tampak penurunan tulang alveolar menyeluruh yang mengarah pada periodontitis generalisata.", "Suspek periodontitis generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "PKL": Finding("Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata.", "Periodontitis Kronis Lokalisata.", "Pemeriksaan periodontal pada area lokalisata dan terapi periodontal sesuai indikasi."),
+    "PKG": Finding("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.", "Periodontitis Kronis Generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "NF": Finding("Tampak nekrosis pulpa dengan apikal akar tampak mengalami resorpsi fisiologis.", "Nekrosis pulpa.", "Evaluasi klinis gigi sulung dan rencana perawatan sesuai status erupsi gigi pengganti."),
+    "PB": Finding("Tampak persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.", "Persistensi.", "Evaluasi klinis persistensi gigi sulung dan pertimbangkan perawatan interseptif bila indikatif."),
     "TD": Finding("Tampak restorasi/tambalan sampai dentin pada gigi terkait.", "Status tambalan sampai dentin.", "Evaluasi adaptasi restorasi dan kontrol berkala."),
     "TP": Finding("Tampak restorasi/tambalan sampai kamar pulpa pada gigi terkait.", "Status tambalan sampai kamar pulpa.", "Evaluasi endodontik dan integritas restorasi."),
     "DBN": Finding("Struktur yang dinilai tampak dalam batas normal radiografis.", "Dalam batas normal radiografis.", "Kontrol berkala sesuai indikasi klinis."),
@@ -121,7 +131,7 @@ ABBREVIATIONS: dict[str, Finding] = {
 
 
 def expand_abbreviations(text: str) -> str:
-    """Expand PHIMA shorthand abbreviations while preserving user wording."""
+    """Expand PHIMA shorthand abbreviations using the active knowledge dictionary."""
 
     def replace(match: re.Match[str]) -> str:
         code = match.group(1).upper()
@@ -129,7 +139,32 @@ def expand_abbreviations(text: str) -> str:
             return "crowding"
         return f"{code} ({ABBREVIATION_EXPANSIONS[code]})"
 
-    return TOKEN_RE.sub(replace, text.strip())
+    expanded_lines: list[str] = []
+    for raw_line in text.strip().splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        codes = {match.group(1).upper() for match in TOKEN_RE.finditer(line)}
+        location = format_location(line)
+        impaction_terms = [
+            ABBREVIATION_EXPANSIONS[code].lower()
+            for code in ("IM", "H", "M", "D", "V", "PE", "T")
+            if code in codes
+        ]
+        if impaction_terms and location != "regio yang dituliskan":
+            expanded_lines.append(f"{location.capitalize()} {' '.join(impaction_terms)}.")
+        elif "PKL" in codes:
+            expanded_lines.append(f"Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata pada area {location}.")
+        elif "PKG" in codes:
+            expanded_lines.append("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.")
+        elif "NF" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak nekrosis pulpa pada {location} dengan apikal akar tampak mengalami resorpsi fisiologis.")
+        elif "PB" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak persistensi {location} dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.")
+        else:
+            expanded_lines.append(TOKEN_RE.sub(replace, line))
+
+    return " ".join(expanded_lines)
 
 
 def format_location(text: str) -> str:
@@ -173,7 +208,7 @@ def render_legacy_report(entries: list[tuple[str, str, Finding]]) -> dict[str, l
     seen_suggestions: set[str] = set()
     for code, location, finding in entries:
         interpretation.append(f"Pada {location}: {finding.interpretation} ({ABBREVIATION_EXPANSIONS.get(code, code)})")
-        diagnosis.append(f"{finding.diagnosis} Lokasi: {location}.")
+        diagnosis.append(f"{finding.diagnosis.rstrip('.')} Lokasi: {location}.")
         if finding.suggestion not in seen_suggestions:
             suggestions.append(finding.suggestion)
             seen_suggestions.add(finding.suggestion)
@@ -206,7 +241,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.2.3 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.2.4 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -318,13 +353,13 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2.3 — Template Engine</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2.4 — Knowledge Dictionary 2026.06</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("PHIMA v0.2.3 — Template Engine")
+    st.header("PHIMA v0.2.4 — Knowledge Dictionary 2026.06")
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.divider()
     st.subheader("Ekspansi Singkatan")
