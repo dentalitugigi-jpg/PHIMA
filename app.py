@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 TMJ_NORMAL_WORDING = (
@@ -175,6 +176,18 @@ def build_final_report(stage_1: str, stage_2: str, stage_3: str) -> dict[str, st
     }
 
 
+def format_report_text(report: dict[str, str]) -> str:
+    """Return a plain-text PHIMA report suitable for editing, copying, and saving."""
+
+    return "\n\n".join(f"{section}\n{content}" for section, content in report.items())
+
+
+def set_report_status(status: str) -> None:
+    """Persist the visible radiologist correction workflow status."""
+
+    st.session_state.report_status = status
+
+
 st.set_page_config(page_title="P.H.I.M.A. Radiology Report Platform", page_icon="🦷", layout="wide")
 
 st.markdown(
@@ -207,13 +220,13 @@ st.markdown(
     div[data-testid="stButton"] > button:focus, div[data-testid="stButton"] > button:active { color: #061426 !important; border: 0 !important; box-shadow: 0 0 0 0.2rem rgba(212, 160, 23, 0.34), 0 16px 32px rgba(212, 160, 23, 0.34) !important; }
     h1, h2, h3, .stHeader { color: var(--phima-white) !important; }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · v0.2.1</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header("PHIMA v0.2")
+    st.header("PHIMA v0.2.1")
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.divider()
     st.subheader("Ekspansi Singkatan")
@@ -257,13 +270,80 @@ if st.session_state.get("stage_3_visible"):
     st.markdown('<div class="phima-description">Masukkan evaluasi radiografis TMJ meliputi kondilus kanan dan kiri, posisi atau asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, serta penebalan kortikal.</div>', unsafe_allow_html=True)
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
     if st.button("Generate Final PHIMA Report", type="primary"):
-        st.session_state.final_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3)
+        st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3)
+        st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
+        st.session_state.corrected_report_text = st.session_state.ai_report_text
+        st.session_state.final_corrected_report = st.session_state.corrected_report_text
+        st.session_state.ai_report_editor = st.session_state.ai_report_text
+        st.session_state.corrected_report_editor = st.session_state.corrected_report_text
+        set_report_status("Draft AI Report")
 
-if "final_report" in st.session_state:
-    st.header("Final PHIMA Report")
-    for section, content in st.session_state.final_report.items():
-        st.subheader(section)
-        st.write(content)
+if "ai_report_text" in st.session_state:
+    st.header("Radiologist Correction Workflow")
+    status = st.session_state.get("report_status", "Draft AI Report")
+    status_steps = ["Draft AI Report", "Corrected by Radiologist", "Final Report Ready"]
+    status_markup = "".join(
+        f'<span style="display:inline-block;margin:0.25rem 0.4rem 0.25rem 0;padding:0.55rem 0.9rem;border-radius:999px;border:1px solid rgba(212,160,23,0.48);background:{"rgba(212,160,23,0.24)" if step == status else "rgba(255,255,255,0.06)"};color:#EAF2FF;font-weight:850;">{step}</span>'
+        for step in status_steps
+    )
+    st.markdown(f'<div class="phima-card"><strong>Status:</strong><br>{status_markup}</div>', unsafe_allow_html=True)
+
+    ai_report_text = st.text_area(
+        "Generated AI Report",
+        height=360,
+        key="ai_report_editor",
+        help="Editable AI-generated draft. Changes here do not replace the final corrected report until copied manually by the radiologist.",
+    )
+    st.session_state.ai_report_text = ai_report_text
+
+    corrected_report_text = st.text_area(
+        "Final Corrected Report",
+        height=360,
+        key="corrected_report_editor",
+        help="Primary final report field for copying and future saving.",
+    )
+    st.session_state.corrected_report_text = corrected_report_text
+
+    col_update, col_copy = st.columns(2)
+    with col_update:
+        if st.button("Update Final Report", type="primary"):
+            st.session_state.final_corrected_report = st.session_state.corrected_report_text
+            set_report_status("Final Report Ready")
+            st.rerun()
+    with col_copy:
+        final_report_for_copy = st.session_state.get("final_corrected_report", st.session_state.corrected_report_text)
+        st.download_button(
+            "Copy Final Report",
+            data=final_report_for_copy,
+            file_name="phima_final_corrected_report.txt",
+            mime="text/plain",
+            type="primary",
+            help="Uses the final corrected report as the main output for copying and future saving.",
+        )
+        components.html(
+            f"""
+            <button id=\"copy-final-report\" style=\"width:100%;min-height:3.4rem;border:0;border-radius:18px;background:linear-gradient(135deg,#D4A017 0%,#E7B438 100%);color:#071426;font-size:1.05rem;font-weight:900;cursor:pointer;\">Copy Final Report to Clipboard</button>
+            <div id=\"copy-status\" style=\"margin-top:0.55rem;color:#C8FFD9;font-weight:700;text-align:center;\"></div>
+            <script>
+            const report = {final_report_for_copy!r};
+            const button = document.getElementById('copy-final-report');
+            const status = document.getElementById('copy-status');
+            button.addEventListener('click', async () => {{
+              try {{
+                await navigator.clipboard.writeText(report);
+                status.textContent = 'Final Report Ready';
+              }} catch (error) {{
+                status.textContent = 'Clipboard unavailable. Use the download copy above.';
+              }}
+            }});
+            </script>
+            """,
+            height=105,
+        )
+
+    if st.session_state.get("final_corrected_report"):
+        st.subheader("Main Output: Final Corrected Report")
+        st.text(st.session_state.final_corrected_report)
 
 with st.expander("PHIMA v0.1 shorthand generator tetap tersedia"):
     sample = "18 IM H PE\n36 AP NP\n46 PR\nPG Crowding"
