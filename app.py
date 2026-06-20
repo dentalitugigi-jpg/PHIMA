@@ -33,6 +33,7 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "D": "distoangular",
     "V": "vertikal",
     "PE": "partial erupsi",
+    "T": "Terbenam",
     "B": "bersinggungan",
     "S": "superimpose",
     "PR": "pulpitis reversible",
@@ -42,15 +43,59 @@ ABBREVIATION_EXPANSIONS: dict[str, str] = {
     "GR": "gangren radiks",
     "ED": "edentulous",
     "PG": "periodontitis generalisata",
+    "PKL": "Periodontitis Kronis Lokalisata",
+    "PKG": "Periodontitis Kronis Generalisata",
+    "NF": "Nekrosis pulpa gigi dengan apikal akar tampak mengalami resorpsi fisiologis",
+    "PB": "Persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis",
     "TD": "tambalan sampai dentin",
     "TP": "tambalan sampai kamar pulpa",
     "DBN": "dalam batas normal radiografis",
 }
 
 TOKEN_RE = re.compile(
-    r"\b(DBN|PIR|CROWDING|PE|PR|NP|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|B|S)\b", re.IGNORECASE
+    r"\b(DBN|PIR|CROWDING|PKL|PKG|PE|PR|NP|NF|PB|AP|GR|ED|PG|TD|TP|IM|H|M|D|V|T|B|S)\b", re.IGNORECASE
 )
 TOOTH_RE = re.compile(r"\b(?:[1-4][1-8]|[5-8][1-5])\b")
+
+
+@dataclass(frozen=True)
+class ReportTemplate:
+    """Clinical report template metadata used by PHIMA template engine."""
+
+    key: str
+    label: str
+    description: str
+
+
+REPORT_TEMPLATES: dict[str, ReportTemplate] = {
+    "adult": ReportTemplate(
+        "adult",
+        "Dewasa — Panoramik Umum",
+        "Struktur laporan panoramik dewasa standar untuk karies, lesi periapikal, edentulous, periodontitis, impaksi, dan temuan umum.",
+    ),
+    "pediatric": ReportTemplate(
+        "pediatric",
+        "Anak — Mixed Dentition",
+        "Format lebih singkat dan fokus untuk gigi sulung, gigi permanen, persistensi gigi sulung dengan apikal akar normal, nekrosis pulpa dengan resorpsi fisiologis, benih gigi permanen, karies, gangren radiks, nekrosis pulpa, serta pulpitis.",
+    ),
+    "ortho": ReportTemplate(
+        "ortho",
+        "Ortodonti — Panoramik Ortho",
+        "Fokus ortodonti pada jumlah gigi, missing teeth/edentulous, impaksi, benih molar tiga, crowding, diastema, relasi akar gigi impaksi, dan kondisi periodontal umum.",
+    ),
+    "impaction": ReportTemplate(
+        "impaction",
+        "Impaksi — Fokus M3",
+        "Fokus impaksi molar tiga 18, 28, 38, 48, termasuk posisi impaksi, partial erupsi/terbenam/perikoronitis, periodontitis kronis lokalisata/generalisata bila tertulis, serta relasi akar terhadap sinus maksilaris atau kanalis mandibularis tanpa mengarang relasi yang tidak dituliskan.",
+    ),
+    "tmj": ReportTemplate(
+        "tmj",
+        "TMJ — Fokus Sendi",
+        "Fokus kondilus kanan-kiri, posisi/asimetri kondilus, fossa glenoidalis, eminensia artikularis, remodeling, osteoartritis, dan cortical thickening bila ada.",
+    ),
+}
+
+DEFAULT_TEMPLATE_KEY = "adult"
 
 
 @dataclass(frozen=True)
@@ -73,6 +118,7 @@ ABBREVIATIONS: dict[str, Finding] = {
     "D": Finding("Arah gigi impaksi tampak distoangular.", "Impaksi gigi posisi distoangular.", "Evaluasi bedah mulut dan korelasi klinis."),
     "V": Finding("Arah gigi impaksi tampak vertikal.", "Impaksi gigi posisi vertikal.", "Evaluasi potensi erupsi dan kebutuhan perawatan."),
     "PE": Finding("Tampak partial erupsi pada gigi terkait.", "Status partial erupsi.", "Korelasi klinis terhadap jaringan lunak perikoronal."),
+    "T": Finding("Gigi terkait tampak terbenam.", "Terbenam.", "Evaluasi relasi gigi terbenam terhadap struktur anatomis sekitar."),
     "B": Finding("Tampak relasi bersinggungan dengan struktur anatomis sekitar.", "Relasi anatomis dekat/bersinggungan.", "Pertimbangkan evaluasi radiografis lanjutan bila indikatif."),
     "S": Finding("Tampak superimpose dengan struktur anatomis sekitar.", "Superimposisi radiografis.", "Pertimbangkan proyeksi atau modalitas tambahan bila diperlukan."),
     "PR": Finding("Tampak gambaran karies yang secara klinis dapat berkaitan dengan pulpitis reversible.", "Suspek pulpitis reversible.", "Evaluasi klinis, tes vitalitas, dan perawatan restoratif."),
@@ -82,6 +128,10 @@ ABBREVIATIONS: dict[str, Finding] = {
     "GR": Finding("Tampak sisa akar/gangren radiks pada regio terkait.", "Suspek gangren radiks.", "Evaluasi prognosis; pertimbangkan ekstraksi bila tidak dapat dipertahankan."),
     "ED": Finding("Tampak area edentulous pada regio terkait.", "Status edentulous.", "Pertimbangkan rehabilitasi prostodontik sesuai kondisi jaringan pendukung."),
     "PG": Finding("Tampak penurunan tulang alveolar menyeluruh yang mengarah pada periodontitis generalisata.", "Suspek periodontitis generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "PKL": Finding("Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata.", "Periodontitis Kronis Lokalisata.", "Pemeriksaan periodontal pada area lokalisata dan terapi periodontal sesuai indikasi."),
+    "PKG": Finding("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.", "Periodontitis Kronis Generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
+    "NF": Finding("Tampak nekrosis pulpa dengan apikal akar tampak mengalami resorpsi fisiologis.", "Nekrosis pulpa.", "Evaluasi klinis gigi sulung dan rencana perawatan sesuai status erupsi gigi pengganti."),
+    "PB": Finding("Tampak persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.", "Persistensi.", "Evaluasi klinis persistensi gigi sulung dan pertimbangkan perawatan interseptif bila indikatif."),
     "TD": Finding("Tampak restorasi/tambalan sampai dentin pada gigi terkait.", "Status tambalan sampai dentin.", "Evaluasi adaptasi restorasi dan kontrol berkala."),
     "TP": Finding("Tampak restorasi/tambalan sampai kamar pulpa pada gigi terkait.", "Status tambalan sampai kamar pulpa.", "Evaluasi endodontik dan integritas restorasi."),
     "DBN": Finding("Struktur yang dinilai tampak dalam batas normal radiografis.", "Dalam batas normal radiografis.", "Kontrol berkala sesuai indikasi klinis."),
@@ -90,7 +140,7 @@ ABBREVIATIONS: dict[str, Finding] = {
 
 
 def expand_abbreviations(text: str) -> str:
-    """Expand PHIMA shorthand abbreviations while preserving user wording."""
+    """Expand PHIMA shorthand abbreviations using the active knowledge dictionary."""
 
     def replace(match: re.Match[str]) -> str:
         code = match.group(1).upper()
@@ -98,7 +148,32 @@ def expand_abbreviations(text: str) -> str:
             return "crowding"
         return f"{code} ({ABBREVIATION_EXPANSIONS[code]})"
 
-    return TOKEN_RE.sub(replace, text.strip())
+    expanded_lines: list[str] = []
+    for raw_line in text.strip().splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        codes = {match.group(1).upper() for match in TOKEN_RE.finditer(line)}
+        location = format_location(line)
+        impaction_terms = [
+            ABBREVIATION_EXPANSIONS[code].lower()
+            for code in ("IM", "H", "M", "D", "V", "PE", "T")
+            if code in codes
+        ]
+        if impaction_terms and location != "regio yang dituliskan":
+            expanded_lines.append(f"{location.capitalize()} {' '.join(impaction_terms)}.")
+        elif "PKL" in codes:
+            expanded_lines.append(f"Tampak penurunan alveolar crest sesuai periodontitis kronis lokalisata pada area {location}.")
+        elif "PKG" in codes:
+            expanded_lines.append("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.")
+        elif "NF" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak nekrosis pulpa pada {location} dengan apikal akar tampak mengalami resorpsi fisiologis.")
+        elif "PB" in codes and location != "regio yang dituliskan":
+            expanded_lines.append(f"Tampak persistensi {location} dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.")
+        else:
+            expanded_lines.append(TOKEN_RE.sub(replace, line))
+
+    return " ".join(expanded_lines)
 
 
 def format_location(text: str) -> str:
@@ -142,7 +217,7 @@ def render_legacy_report(entries: list[tuple[str, str, Finding]]) -> dict[str, l
     seen_suggestions: set[str] = set()
     for code, location, finding in entries:
         interpretation.append(f"Pada {location}: {finding.interpretation} ({ABBREVIATION_EXPANSIONS.get(code, code)})")
-        diagnosis.append(f"{finding.diagnosis} Lokasi: {location}.")
+        diagnosis.append(f"{finding.diagnosis.rstrip('.')} Lokasi: {location}.")
         if finding.suggestion not in seen_suggestions:
             suggestions.append(finding.suggestion)
             seen_suggestions.add(finding.suggestion)
@@ -160,28 +235,83 @@ def formalize_stage_summary(stage_name: str, text: str, default: str) -> str:
     return f"Temuan: {joined}."
 
 
-def build_final_report(stage_1: str, stage_2: str, stage_3: str) -> dict[str, str]:
-    """Generate PHIMA v0.2 report sections from confirmed stage inputs."""
+def tmj_template_text(stage_3: str) -> str:
+    """Apply TMJ-specific wording, including TMD style when explicitly mentioned."""
 
+    expanded = expand_abbreviations(stage_3)
+    if re.search(r"\bTMD\b|temporomandibular disorder|gangguan temporomandibular", stage_3, re.IGNORECASE):
+        return (
+            "Posisi kondilus tampak asimetris, dengan kondilus dekstra tampak lebih anterior dan superior "
+            "dibandingkan kondilus sinistra. Relasi kondilus, fossa, dan eminensia artikularis masih dalam "
+            "batas normal radiografis. Tidak tampak perubahan osseus bermakna berupa osteoartritis, remodeling "
+            "patologis, maupun penebalan kortikal abnormal."
+        )
+    return expanded or TMJ_NORMAL_WORDING
+
+
+def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
+    """Generate PHIMA v0.2.4 report sections from confirmed stage inputs and selected template."""
+
+    template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
     jaw = expand_abbreviations(stage_2) or "Mandibula, maksila, dan sinus maksilaris tampak dalam batas normal radiografis berdasarkan input pengguna."
-    tmj_input = expand_abbreviations(stage_3)
-    tmj = tmj_input or TMJ_NORMAL_WORDING
+    tmj_input = tmj_template_text(stage_3)
 
     legacy_entries = parse_shorthand("\n".join([stage_1, stage_2, stage_3]))
     legacy = render_legacy_report(legacy_entries)
+    diagnosis_text = " ".join(legacy["diagnosis"]) if legacy_entries else "Tidak terdapat suspek radiodiagnosis spesifik dari shorthand yang dikenali; tinjau ulang bersama temuan klinis."
+    suggestion_text = " ".join(legacy["saran"]) if legacy_entries else "Korelasikan dengan pemeriksaan klinis, tes vitalitas, pemeriksaan periodontal, dan pemeriksaan penunjang lain sesuai indikasi."
+    disclaimer = "Laporan ini merupakan draf berbasis input pengguna dan tidak menggantikan interpretasi final dokter gigi/radiolog kedokteran gigi. Temuan harus dikorelasikan dengan pemeriksaan klinis, riwayat pasien, kualitas citra, serta pemeriksaan penunjang lain bila diperlukan."
+
+    if template.key == "pediatric":
+        return {
+            "Interpretasi Radiografis Naratif": (
+                "Pada fase mixed dentition, evaluasi difokuskan pada gigi sulung, gigi permanen, persistensi gigi sulung, "
+                "resorpsi fisiologis akar, benih gigi permanen, karies pada gigi sulung/permanen, gangren radiks, nekrosis pulpa, "
+                f"serta pulpitis reversible/irreversible. Temuan gigi: {teeth} Temuan rahang-sinus: {jaw} TMJ: {tmj_input}"
+            ),
+            "Suspek Radiodiagnosis Ringkas": diagnosis_text,
+        }
+
+    if template.key == "ortho":
+        return {
+            "Interpretasi Radiografis": (
+                f"Jumlah gigi, missing teeth/edentulous, impaksi, benih gigi molar tiga, crowding, diastema, relasi akar gigi impaksi, "
+                f"dan kondisi periodontal umum dievaluasi. Temuan gigi: {teeth} Temuan mandibula, maksila, dan sinus maksilaris: {jaw} TMJ: {tmj_input}"
+            ),
+            "Suspek Radiodiagnosis": diagnosis_text,
+            "Saran": f"Pro Orthodonti. {suggestion_text}",
+            "Disclaimer": disclaimer,
+        }
+
+    if template.key == "impaction":
+        return {
+            "Interpretasi Radiografis": (
+                f"Evaluasi difokuskan pada gigi 18, 28, 38, dan 48. Posisi impaksi dicatat sesuai input (vertikal, horizontal, "
+                f"mesioangular, atau distoangular), termasuk partial erupsi, terbenam, perikoronitis, superimpose, atau bersinggungan hanya bila tertulis. "
+                f"Relasi akar 18/28 terhadap sinus maksilaris dan akar 38/48 terhadap kanalis mandibularis tidak diinventarisasi bila tidak dituliskan. Temuan: {teeth} {jaw}"
+            ),
+            "Suspek Radiodiagnosis": diagnosis_text,
+            "Saran": suggestion_text,
+            "Disclaimer": disclaimer,
+        }
+
+    if template.key == "tmj":
+        return {
+            "Interpretasi Radiografis": (
+                f"Evaluasi difokuskan pada kondilus kanan, kondilus kiri, posisi kondilus, asimetri kondilus, fossa glenoidalis, "
+                f"eminensia artikularis, remodeling, osteoartritis, dan cortical thickening bila ada. {tmj_input}"
+            ),
+            "Suspek Radiodiagnosis": diagnosis_text,
+            "Saran": suggestion_text,
+            "Disclaimer": disclaimer,
+        }
 
     return {
-        "Jumlah Gigi": f"Jumlah dan distribusi gigi dinilai berdasarkan sistem penomoran FDI. {teeth}",
-        "Mahkota dan Akar": f"Evaluasi mahkota dan akar menunjukkan: {teeth}",
-        "Mandibula, Maksila, dan Sinus Maksilaris": jaw,
-        "TMJ": tmj,
-        "Alveolar Crest": "Alveolar crest dievaluasi pada seluruh regio; temuan spesifik mengikuti catatan pengguna. " + jaw,
-        "Periapikal": "Daerah periapikal dievaluasi pada gigi terkait. " + teeth,
-        "Kesan": " ".join(legacy["diagnosis"]) if legacy_entries else "Kesan radiografis disusun berdasarkan temuan terkonfirmasi pada tahap gigi, rahang-sinus, dan TMJ.",
-        "Saran": " ".join(legacy["saran"]) if legacy_entries else "Korelasikan dengan pemeriksaan klinis, tes vitalitas, pemeriksaan periodontal, dan pemeriksaan penunjang lain sesuai indikasi.",
-        "Suspek Radiodiagnosis": " ".join(legacy["diagnosis"]) if legacy_entries else "Tidak terdapat suspek radiodiagnosis spesifik dari shorthand yang dikenali; tinjau ulang bersama temuan klinis.",
-        "Disclaimer": "Laporan ini merupakan draf berbasis input pengguna dan tidak menggantikan interpretasi final dokter gigi/radiolog kedokteran gigi. Temuan harus dikorelasikan dengan pemeriksaan klinis, riwayat pasien, kualitas citra, serta pemeriksaan penunjang lain bila diperlukan.",
+        "Interpretasi Radiografis": f"Jumlah dan distribusi gigi dinilai berdasarkan sistem penomoran FDI. {teeth} Mandibula, maksila, sinus maksilaris, alveolar crest, dan daerah periapikal dievaluasi. {jaw} TMJ: {tmj_input}",
+        "Suspek Radiodiagnosis": diagnosis_text,
+        "Saran": suggestion_text,
+        "Disclaimer": disclaimer,
     }
 
 
@@ -344,14 +474,17 @@ st.markdown(
     div[data-testid="stButton"] > button:hover { background: linear-gradient(135deg, var(--phima-gold-hover) 0%, #FFD36A 100%) !important; color: #061426 !important; box-shadow: 0 22px 42px rgba(240, 185, 45, 0.42); transform: translateY(-3px); filter: saturate(1.12); }
     div[data-testid="stButton"] > button:focus, div[data-testid="stButton"] > button:active { color: #061426 !important; border: 0 !important; box-shadow: 0 0 0 0.2rem rgba(212, 160, 23, 0.34), 0 16px 32px rgba(212, 160, 23, 0.34) !important; }
     h1, h2, h3, .stHeader { color: var(--phima-white) !important; }
+    div[role="radiogroup"] { gap: 0.7rem; }
+    div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
+    div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · PHIMA v0.3.1 — Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    st.header(APP_VERSION_LABEL)
     """,
     unsafe_allow_html=True,
 )
 
 with st.sidebar:
-    st.header(APP_VERSION_LABEL)
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform · PHIMA v0.3.1 — Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("User name", key="user_name", placeholder="Nama radiolog / operator")
     st.selectbox("Selected template", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
@@ -362,10 +495,30 @@ with st.sidebar:
 
 for key, initial in {"stage_1_confirmed": False, "stage_2_visible": False, "stage_2_confirmed": False, "stage_3_visible": False}.items():
     st.session_state.setdefault(key, initial)
+st.session_state.setdefault("selected_template", DEFAULT_TEMPLATE_KEY)
 
 st.markdown("""
 <div class="phima-card"><strong>Instruksi:</strong> Isi tiap tahap menggunakan bahasa klinis singkat atau ekspansi singkatan radiologi yang sesuai. Setelah tiap input, lakukan konfirmasi untuk melihat ringkasan formal sebelum melanjutkan.</div>
 """, unsafe_allow_html=True)
+
+st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Jenis Template Laporan</span><span class="phima-stage-title">TEMPLATE ENGINE</span></h2>', unsafe_allow_html=True)
+st.markdown('<div class="phima-description">Pilih gaya laporan sesuai tipe kasus klinis sebelum report generation. Template terpilih akan memengaruhi struktur laporan final dan tetap dapat diedit pada correction layer.</div>', unsafe_allow_html=True)
+template_labels = [template.label for template in REPORT_TEMPLATES.values()]
+current_template = REPORT_TEMPLATES.get(st.session_state.selected_template, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
+selected_label = st.radio(
+    "Jenis Template Laporan",
+    template_labels,
+    index=template_labels.index(current_template.label),
+    key="selected_template_label",
+)
+st.session_state.selected_template = next(
+    key for key, template in REPORT_TEMPLATES.items() if template.label == selected_label
+)
+selected_template = REPORT_TEMPLATES[st.session_state.selected_template]
+st.markdown(
+    f'<div class="phima-card"><strong>Template terpilih:</strong> {selected_template.label}<br>{selected_template.description}</div>',
+    unsafe_allow_html=True,
+)
 
 st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 1</span><span class="phima-stage-title">GIGI</span></h2>', unsafe_allow_html=True)
 st.markdown('<div class="phima-description">Masukkan temuan radiografis mengenai jumlah dan distribusi gigi, area edentulous, impaksi, karies PR/PIR, nekrosis pulpa, gangren radiks, abses periapikal, restorasi TD/TP, crowding/diastema, serta status periodontal.</div>', unsafe_allow_html=True)
@@ -396,8 +549,10 @@ if st.session_state.get("stage_3_visible"):
     st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Konfirmasi Tahap 3</span><span class="phima-stage-title">TMJ</span></h2>', unsafe_allow_html=True)
     st.markdown('<div class="phima-description">Masukkan evaluasi radiografis TMJ meliputi kondilus kanan dan kiri, posisi atau asimetri kondilus, relasi kondilus-fossa-eminensia, osteoartritis, remodeling patologis, serta penebalan kortikal.</div>', unsafe_allow_html=True)
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
+    selected_template = REPORT_TEMPLATES[st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY)]
+    st.markdown(f'<div class="phima-card"><strong>Template sebelum report generation:</strong> {selected_template.label}</div>', unsafe_allow_html=True)
     if st.button("Generate Final PHIMA Report", type="primary"):
-        st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3)
+        st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3, st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY))
         st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
         st.session_state.generated_ai_report_original = st.session_state.ai_report_text
         st.session_state.corrected_report_text = st.session_state.ai_report_text
