@@ -725,29 +725,35 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if "admin_authenticated" not in st.session_state:
+    st.session_state["admin_authenticated"] = False
+
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
     st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
     st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
-    if st.button("🔒 Admin Database", key="show_admin_database"):
-        st.session_state.show_admin_database = True
-    if st.session_state.get("show_admin_database"):
+    st.subheader("Admin Database")
+    if st.session_state["admin_authenticated"]:
+        st.success("Dashboard admin terbuka.")
+        if st.button("Keluar Admin", key="admin_logout_button"):
+            st.session_state["admin_authenticated"] = False
+    else:
         admin_password = st.text_input("Password Admin", type="password", key="admin_password_input")
-        if admin_password:
+        if st.button("Masuk Admin", key="admin_login_button"):
             if admin_password == get_admin_password():
-                st.session_state.admin_authenticated = True
-                st.success("Admin dashboard unlocked.")
+                st.session_state["admin_authenticated"] = True
+                st.success("Dashboard admin terbuka.")
             else:
-                st.session_state.admin_authenticated = False
+                st.session_state["admin_authenticated"] = False
                 st.error("Password admin tidak sesuai.")
     st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
         st.markdown(f"- **{code}** = {meaning}")
 
-if st.session_state.get("admin_authenticated"):
+if st.session_state["admin_authenticated"] is True:
     render_admin_database_dashboard()
 
 for key, initial in {"stage_1_confirmed": False, "stage_2_visible": False, "stage_2_confirmed": False, "stage_3_visible": False}.items():
