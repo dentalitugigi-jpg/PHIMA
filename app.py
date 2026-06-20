@@ -17,7 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 
-APP_VERSION_LABEL = "PHIMA v0.3.1 — Auto-Save Final Report Workflow"
+APP_VERSION_LABEL = "PHIMA v0.3.2 — Indonesian Clinical Workflow"
 DATABASE_PATH = Path("phima_bank_data.sqlite3")
 
 
@@ -250,7 +250,7 @@ def tmj_template_text(stage_3: str) -> str:
 
 
 def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: str = DEFAULT_TEMPLATE_KEY) -> dict[str, str]:
-    """Generate PHIMA v0.3.1 report sections from confirmed stage inputs and selected template."""
+    """Generate PHIMA v0.3.2 report sections from confirmed stage inputs and selected template."""
 
     template = REPORT_TEMPLATES.get(template_key, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
     teeth = expand_abbreviations(stage_1) or "Tidak terdapat temuan gigi spesifik yang dilaporkan."
@@ -321,10 +321,25 @@ def format_report_text(report: dict[str, str]) -> str:
     return "\n\n".join(f"{section}\n{content}" for section, content in report.items())
 
 
-def set_report_status(status: str) -> None:
-    """Persist the visible radiologist correction workflow status."""
+STATUS_LABELS = {
+    "Draft AI Report": "Draf Interpretasi Otomatis",
+    "Draf Interpretasi AI": "Draf Interpretasi Otomatis",
+    "Corrected by Radiologist": "Telah Direvisi Dokter",
+    "Telah Direvisi Radiolog": "Telah Direvisi Dokter",
+    "Final Report Ready": "Interpretasi Final Siap",
+}
 
-    st.session_state.report_status = status
+
+def display_report_status(status: str) -> str:
+    """Return the Indonesian clinical workflow label for a report status."""
+
+    return STATUS_LABELS.get(status, status)
+
+
+def set_report_status(status: str) -> None:
+    """Persist the visible doctor correction workflow status."""
+
+    st.session_state.report_status = display_report_status(status)
 
 
 def utc_timestamp() -> str:
@@ -408,7 +423,7 @@ def save_case_to_database() -> bool:
         "final_corrected_report": final_report,
         "radiodiagnosis": st.session_state.get("radiodiagnosis", ""),
         "notes": st.session_state.get("case_notes", ""),
-        "report_status": "Final Report Ready",
+        "report_status": "Interpretasi Final Siap",
     }
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.execute(
@@ -478,7 +493,7 @@ st.markdown(
     div[role="radiogroup"] label { background: rgba(9, 28, 51, 0.78); border: 1px solid rgba(212,160,23,0.28); border-radius: 18px; padding: 0.78rem 1rem; margin-bottom: 0.55rem; }
     div[role="radiogroup"] label:hover { border-color: rgba(240,185,45,0.72); background: rgba(13, 47, 86, 0.88); }
     </style>
-    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.1 Auto-Save Final Report Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
+    <section class="phima-hero"><div class="phima-eyebrow">Premium Dental Radiology Platform - PHIMA v0.3.2 Indonesian Clinical Workflow</div><h1 class="phima-title">P.H.I.M.A.</h1><div class="phima-subtitle">Panoramic Hybrid Intelligence for Maxillofacial Assessment</div><div class="phima-tagline">From Panoramic Findings to Professional Radiology Reports</div></section>
     """,
     unsafe_allow_html=True,
 )
@@ -486,8 +501,8 @@ st.markdown(
 with st.sidebar:
     st.header(APP_VERSION_LABEL)
     st.write("Gunakan input teks bebas dan sistem penomoran gigi FDI.")
-    st.text_input("User name", key="user_name", placeholder="Nama radiolog / operator")
-    st.selectbox("Selected template", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
+    st.text_input("Nama Dokter", key="user_name", placeholder="Nama dokter pemeriksa")
+    st.selectbox("Template Laporan", ["Panoramic Radiology Report", "Impaction Assessment", "Periodontal Assessment", "TMJ Screening"], key="report_template")
     st.divider()
     st.subheader("Ekspansi Singkatan")
     for code, meaning in ABBREVIATION_EXPANSIONS.items():
@@ -502,7 +517,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<h2 class="phima-stage"><span class="phima-stage-kicker">Jenis Template Laporan</span><span class="phima-stage-title">TEMPLATE ENGINE</span></h2>', unsafe_allow_html=True)
-st.markdown('<div class="phima-description">Pilih gaya laporan sesuai tipe kasus klinis sebelum report generation. Template terpilih akan memengaruhi struktur laporan final dan tetap dapat diedit pada correction layer.</div>', unsafe_allow_html=True)
+st.markdown('<div class="phima-description">Pilih gaya laporan sesuai tipe kasus klinis sebelum report generation. Template laporan terpilih akan memengaruhi struktur laporan final dan tetap dapat diedit pada correction layer.</div>', unsafe_allow_html=True)
 template_labels = [template.label for template in REPORT_TEMPLATES.values()]
 current_template = REPORT_TEMPLATES.get(st.session_state.selected_template, REPORT_TEMPLATES[DEFAULT_TEMPLATE_KEY])
 selected_label = st.radio(
@@ -516,7 +531,7 @@ st.session_state.selected_template = next(
 )
 selected_template = REPORT_TEMPLATES[st.session_state.selected_template]
 st.markdown(
-    f'<div class="phima-card"><strong>Template terpilih:</strong> {selected_template.label}<br>{selected_template.description}</div>',
+    f'<div class="phima-card"><strong>Template laporan terpilih:</strong> {selected_template.label}<br>{selected_template.description}</div>',
     unsafe_allow_html=True,
 )
 
@@ -551,7 +566,7 @@ if st.session_state.get("stage_3_visible"):
     stage_3 = st.text_area("Input temuan TMJ", value=TMJ_NORMAL_WORDING, height=160, key="stage_3")
     selected_template = REPORT_TEMPLATES[st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY)]
     st.markdown(f'<div class="phima-card"><strong>Template sebelum report generation:</strong> {selected_template.label}</div>', unsafe_allow_html=True)
-    if st.button("Generate Final PHIMA Report", type="primary"):
+    if st.button("Buat Interpretasi PHIMA", type="primary"):
         st.session_state.ai_report = build_final_report(stage_1, st.session_state.get("stage_2", ""), stage_3, st.session_state.get("selected_template", DEFAULT_TEMPLATE_KEY))
         st.session_state.ai_report_text = format_report_text(st.session_state.ai_report)
         st.session_state.generated_ai_report_original = st.session_state.ai_report_text
@@ -559,12 +574,12 @@ if st.session_state.get("stage_3_visible"):
         st.session_state.final_corrected_report = st.session_state.corrected_report_text
         st.session_state.ai_report_editor = st.session_state.ai_report_text
         st.session_state.corrected_report_editor = st.session_state.corrected_report_text
-        set_report_status("Draft AI Report")
+        set_report_status("Draf Interpretasi Otomatis")
 
 if "ai_report_text" in st.session_state:
-    st.header("Radiologist Correction Workflow")
+    st.header("Revisi dan Validasi Interpretasi")
     st.text_area(
-        "Generated AI Report",
+        "Draf Interpretasi Otomatis",
         value=st.session_state.get("generated_ai_report_original", st.session_state.get("ai_report_text", "")),
         height=260,
         disabled=True,
@@ -572,7 +587,7 @@ if "ai_report_text" in st.session_state:
     )
 
     corrected_report_text = st.text_area(
-        "Final Corrected Report",
+        "Interpretasi Final",
         height=360,
         key="corrected_report_editor",
         help="Primary final report field. Edits are auto-saved as the main final report output.",
@@ -581,14 +596,14 @@ if "ai_report_text" in st.session_state:
     if corrected_report_text != st.session_state.get("final_corrected_report", ""):
         st.session_state.final_corrected_report = corrected_report_text
         if st.session_state.get("last_saved_final_report_hash") != report_hash(corrected_report_text):
-            set_report_status("Corrected by Radiologist")
+            set_report_status("Telah Direvisi Dokter")
 
-    status = st.session_state.get("report_status", "Draft AI Report")
+    status = display_report_status(st.session_state.get("report_status", "Draf Interpretasi Otomatis"))
 
     status_steps = [
-        "Draft AI Report",
-        "Corrected by Radiologist",
-        "Final Report Ready",
+        "Draf Interpretasi Otomatis",
+        "Telah Direvisi Dokter",
+        "Interpretasi Final Siap",
     ]
 
     status_markup = "".join(
@@ -616,14 +631,14 @@ if "ai_report_text" in st.session_state:
 
     col_ready, col_copy = st.columns(2)
     with col_ready:
-        if st.button("Final Report Ready", type="primary"):
+        if st.button("Interpretasi Final Siap", type="primary"):
             st.session_state.final_corrected_report = st.session_state.corrected_report_text
-            set_report_status("Final Report Ready")
+            set_report_status("Interpretasi Final Siap")
             saved = save_case_to_database()
             if saved:
                 st.success("Final report ready and automatically saved to PHIMA Bank Data.")
             else:
-                st.info("Final report is already saved to PHIMA Bank Data. Edit the Final Corrected Report to update the saved case.")
+                st.info("Final report is already saved to PHIMA Bank Data. Edit the Interpretasi Final to update the saved case.")
     with col_copy:
         final_report_for_copy = st.session_state.get("final_corrected_report", st.session_state.corrected_report_text)
         st.download_button(
@@ -645,7 +660,7 @@ if "ai_report_text" in st.session_state:
             button.addEventListener('click', async () => {{
               try {{
                 await navigator.clipboard.writeText(report);
-                status.textContent = 'Final Report Ready';
+                status.textContent = 'Interpretasi Final Siap';
               }} catch (error) {{
                 status.textContent = 'Clipboard unavailable. Use the download copy above.';
               }}
@@ -656,7 +671,7 @@ if "ai_report_text" in st.session_state:
         )
 
     if st.session_state.get("final_corrected_report"):
-        st.subheader("Main Output: Final Corrected Report")
+        st.subheader("Interpretasi Final")
         st.text(st.session_state.final_corrected_report)
 
 with st.expander("PHIMA v0.1 shorthand generator tetap tersedia"):
