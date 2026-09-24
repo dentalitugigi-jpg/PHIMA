@@ -58,6 +58,15 @@ TOKEN_RE = re.compile(
 )
 TOOTH_RE = re.compile(r"\b(?:[1-4][1-8]|[5-8][1-5])\b")
 
+# FDI order used in a formal adult panoramic report.  The third molars are
+# intentionally kept at the ends of their respective arches/quadrants.
+ADULT_FDI_ORDER = (
+    "18", "17", "16", "15", "14", "13", "12", "11",
+    "21", "22", "23", "24", "25", "26", "27", "28",
+    "38", "37", "36", "35", "34", "33", "32", "31",
+    "41", "42", "43", "44", "45", "46", "47", "48",
+)
+
 
 @dataclass(frozen=True)
 class ReportTemplate:
@@ -158,8 +167,8 @@ ABBREVIATIONS: dict[str, Finding] = {
     "T": Finding("Gigi terkait tampak terbenam.", "Terbenam.", "Evaluasi relasi gigi terbenam terhadap struktur anatomis sekitar."),
     "B": Finding("Tampak relasi bersinggungan dengan struktur anatomis sekitar.", "Relasi anatomis dekat/bersinggungan.", "Pertimbangkan evaluasi radiografis lanjutan bila indikatif."),
     "S": Finding("Tampak superimpose dengan struktur anatomis sekitar.", "Superimposisi radiografis.", "Pertimbangkan proyeksi atau modalitas tambahan bila diperlukan."),
-    "PR": Finding("Tampak gambaran karies yang secara klinis dapat berkaitan dengan pulpitis reversible.", "Suspek pulpitis reversible.", "Evaluasi klinis, tes vitalitas, dan perawatan restoratif."),
-    "PIR": Finding("Tampak gambaran karies dalam yang secara klinis dapat berkaitan dengan pulpitis irreversible.", "Suspek pulpitis irreversible.", "Evaluasi endodontik dan perawatan saluran akar bila indikatif."),
+    "PR": Finding("Terdapat temuan PR pada gigi terkait.", "Suspek pulpitis reversibel.", ""),
+    "PIR": Finding("Terdapat temuan PIR pada gigi terkait.", "Suspek pulpitis irreversibel.", ""),
     "NP": Finding("Tampak kondisi gigi yang mengarah pada nekrosis pulpa berdasarkan temuan radiografis terkait.", "Suspek nekrosis pulpa.", "Tes vitalitas dan evaluasi endodontik."),
     "AP": Finding("Tampak gambaran radiolusen periapikal yang dapat sesuai dengan abses periapikal.", "Suspek abses periapikal.", "Evaluasi endodontik dan korelasi dengan tanda inflamasi klinis."),
     "GR": Finding("Tampak sisa akar/gangren radiks pada regio terkait.", "Suspek gangren radiks.", "Evaluasi prognosis; pertimbangkan ekstraksi bila tidak dapat dipertahankan."),
@@ -169,8 +178,8 @@ ABBREVIATIONS: dict[str, Finding] = {
     "PKG": Finding("Tampak penurunan alveolar crest secara generalisata sesuai periodontitis kronis generalisata.", "Periodontitis Kronis Generalisata.", "Pemeriksaan periodontal komprehensif dan terapi periodontal bertahap."),
     "NF": Finding("Tampak nekrosis pulpa dengan apikal akar tampak mengalami resorpsi fisiologis.", "Nekrosis pulpa.", "Evaluasi klinis gigi sulung dan rencana perawatan sesuai status erupsi gigi pengganti."),
     "PB": Finding("Tampak persistensi gigi dengan apikal akar tampak dalam batas normal dan belum tampak tanda resorpsi fisiologis.", "Persistensi.", "Evaluasi klinis persistensi gigi sulung dan pertimbangkan perawatan interseptif bila indikatif."),
-    "TD": Finding("Tampak restorasi/tambalan sampai dentin pada gigi terkait.", "Status tambalan sampai dentin.", "Evaluasi adaptasi restorasi dan kontrol berkala."),
-    "TP": Finding("Tampak restorasi/tambalan sampai kamar pulpa pada gigi terkait.", "Status tambalan sampai kamar pulpa.", "Evaluasi endodontik dan integritas restorasi."),
+    "TD": Finding("Tampak restorasi sampai dentin pada gigi terkait.", "Status restorasi sampai dentin.", ""),
+    "TP": Finding("Tampak restorasi sampai kamar pulpa pada gigi terkait.", "Status restorasi sampai kamar pulpa.", ""),
     "DBN": Finding("Struktur yang dinilai tampak dalam batas normal radiografis.", "Dalam batas normal radiografis.", "Kontrol berkala sesuai indikasi klinis."),
     "CROWDING": Finding("Tampak ketidakteraturan posisi gigi yang mengarah pada crowding dental.", "Suspek crowding dental.", "Konsultasi ortodontik untuk analisis ruang."),
 }
@@ -275,7 +284,11 @@ def clean_free_text(text: str) -> str:
 
 
 def parse_report_findings(stage_1: str, stage_2: str, stage_3: str, template_key: str) -> dict[str, list[str]]:
-    """Build OMFR-style interpretation, diagnosis, and suggestion items from PHIMA shorthand."""
+    """Build a conservative formal report from explicitly supplied findings.
+
+    Codes on a line apply only to the FDI teeth on that line.  No lesion
+    morphology, caries depth, restoration failure, or treatment is inferred.
+    """
 
     sections = {
         "Jumlah Gigi": [],
@@ -292,64 +305,75 @@ def parse_report_findings(stage_1: str, stage_2: str, stage_3: str, template_key
     all_lines += [("stage_2", line.strip()) for line in stage_2.splitlines() if line.strip()]
     all_lines += [("stage_3", line.strip()) for line in stage_3.splitlines() if line.strip()]
 
+    impacted_teeth = {
+        tooth
+        for _, line in all_lines
+        if "IM" in {match.group(1).upper() for match in TOKEN_RE.finditer(line)}
+        for tooth in TOOTH_RE.findall(line)
+    }
+
+    abnormal_adult_teeth: set[str] = set()
+    grouped_interpretations: dict[str, list[str]] = {}
+    grouped_diagnoses: dict[str, list[str]] = {}
+
+    def add_group(group: dict[str, list[str]], wording: str, teeth: list[str]) -> None:
+        if wording and teeth:
+            group.setdefault(wording, []).extend(teeth)
+
     for source, line in all_lines:
-        upper = line.upper()
         codes = {match.group(1).upper() for match in TOKEN_RE.finditer(line)}
         teeth = unique_preserve(TOOTH_RE.findall(line))
+        if codes - {"DBN"} or (not codes and line.strip()):
+            abnormal_adult_teeth.update(tooth for tooth in teeth if tooth in ADULT_FDI_ORDER)
         tooth_label = f"gigi {', '.join(teeth)}" if teeth else ""
         lowered = line.lower()
 
         if re.search(r"\bjumlah\s+gigi\b", lowered) or re.search(r"\b\d+\s+gigi\b", lowered):
             sections["Jumlah Gigi"].append(clean_free_text(line))
 
-        if "IM" in codes:
+        if "IM" in codes and teeth:
             angulations = [ABBREVIATION_EXPANSIONS[c].lower() for c in ("M", "D", "V") if c in codes]
             position = "posisi horizontal" if "H" in codes else ""
             eruption = "partial erupsi" if "PE" in codes else "terbenam" if "T" in codes else ""
             descriptors = " ".join(unique_preserve(angulations + [position, eruption]))
-            if tooth_label:
-                sections["Mahkota"].append(sentence(f"{tooth_label.capitalize()} tampak impaksi {descriptors}"))
-                dx_terms = " ".join(unique_preserve(angulations + (["horizontal"] if "H" in codes else []) + ([eruption] if eruption else [])))
-                sections["diagnosis"].append(sentence(f"Impaksi {dx_terms} {tooth_label}"))
-            else:
-                sections["Mahkota"].append(sentence(f"Tampak impaksi {descriptors}"))
-                sections["diagnosis"].append(sentence(f"Impaksi {descriptors}"))
-            sections["suggestions"].append("Evaluasi bedah mulut untuk gigi impaksi.")
+            description = "Impaksi" + (f" {descriptors}" if descriptors else "")
+            add_group(grouped_interpretations, description, teeth)
+            add_group(grouped_diagnoses, description, teeth)
 
         if any(code in codes for code in ("PR", "PIR", "TD", "TP", "GR", "NF", "PB")):
-            if "PIR" in codes and tooth_label:
-                sections["Mahkota"].append(sentence(f"{tooth_label.capitalize()} menunjukkan gambaran karies dalam yang dapat berkaitan dengan pulpitis irreversible"))
-                sections["diagnosis"].append(sentence(f"Pulpitis irreversible {tooth_label}"))
-                sections["suggestions"].append(f"Evaluasi endodontik {tooth_label}.")
-            if "PR" in codes and tooth_label:
-                sections["Mahkota"].append(sentence(f"{tooth_label.capitalize()} menunjukkan gambaran karies yang dapat berkaitan dengan pulpitis reversible"))
-                sections["diagnosis"].append(sentence(f"Pulpitis reversible {tooth_label}"))
-                sections["suggestions"].append(f"Evaluasi restoratif dan tes vitalitas {tooth_label}.")
+            if "PIR" in codes and teeth:
+                add_group(grouped_interpretations, "Temuan sesuai pulpitis irreversibel", teeth)
+                add_group(grouped_diagnoses, "Pulpitis irreversibel", teeth)
+            if "PR" in codes and teeth:
+                pr_impacted = [tooth for tooth in teeth if tooth in impacted_teeth]
+                pr_non_impacted = [tooth for tooth in teeth if tooth not in impacted_teeth]
+                add_group(grouped_interpretations, "Temuan sesuai perikoronitis", pr_impacted)
+                add_group(grouped_interpretations, "Temuan sesuai pulpitis reversibel", pr_non_impacted)
+                add_group(grouped_diagnoses, "Perikoronitis", pr_impacted)
+                add_group(grouped_diagnoses, "Pulpitis reversibel", pr_non_impacted)
             if any(code in codes for code in ("GR", "NF", "PB")):
                 sections["Akar"].append(clean_free_text(line))
                 for code in ("GR", "NF", "PB"):
                     if code in codes and tooth_label:
                         sections["diagnosis"].append(sentence(f"{ABBREVIATION_EXPANSIONS[code].split(' gigi ')[0].capitalize()} {tooth_label}"))
             for code in ("TD", "TP"):
-                if code in codes and tooth_label:
-                    sections["Mahkota"].append(sentence(f"{tooth_label.capitalize()} tampak {ABBREVIATION_EXPANSIONS[code]}"))
+                if code in codes and teeth:
+                    depth = "Restorasi sampai dentin" if code == "TD" else "Restorasi sampai kamar pulpa"
+                    add_group(grouped_interpretations, depth, teeth)
 
         if any(code in codes for code in ("PG", "PKL", "PKG")) or "periodontitis" in lowered:
             if "PG" in codes or "generalisata" in lowered:
                 sections["Alveolar Crest"].append("Tampak penurunan alveolar crest secara generalisata.")
                 sections["diagnosis"].append("Periodontitis kronis generalisata.")
-                sections["suggestions"].append("Evaluasi periodontal komprehensif.")
             elif tooth_label:
                 sections["Alveolar Crest"].append(sentence(f"Tampak penurunan alveolar crest lokalisata pada {tooth_label}"))
                 sections["diagnosis"].append(sentence(f"Periodontitis kronis lokalisata {tooth_label}"))
-                sections["suggestions"].append("Evaluasi periodontal terarah pada regio terkait.")
 
         if "AP" in codes or "periapikal" in lowered:
             target = tooth_label or clean_free_text(line)
             sections["Periapikal"].append(sentence(f"Tampak gambaran radiolusen periapikal pada {target}" if tooth_label else target))
             if tooth_label:
                 sections["diagnosis"].append(sentence(f"Abses periapikal {tooth_label}"))
-            sections["suggestions"].append("Evaluasi endodontik pada gigi dengan lesi periapikal.")
 
         if "ED" in codes and tooth_label:
             sections["Jumlah Gigi"].append(sentence(f"Area edentulous pada regio {', '.join(teeth)}"))
@@ -359,7 +383,6 @@ def parse_report_findings(stage_1: str, stage_2: str, stage_3: str, template_key
             area = "anterior mandibula" if "mandib" in lowered or not tooth_label else tooth_label
             sections["Mahkota"].append(sentence(f"Tampak crowding {area}"))
             sections["diagnosis"].append(sentence(f"Crowding {area}"))
-            sections["suggestions"].append("Evaluasi ortodontik untuk analisis ruang.")
 
         if source == "stage_3" and has_tmj_findings(line):
             sections["TMJ"].append(tmj_template_text(line))
@@ -370,8 +393,26 @@ def parse_report_findings(stage_1: str, stage_2: str, stage_3: str, template_key
                 target_section = "Alveolar Crest" if "alveolar" in lowered or "periodontal" in lowered else "Periapikal" if "periapikal" in lowered else "Mahkota"
                 sections[target_section].append(sentence(cleaned))
 
-    if template_key == "tmj" and not sections["TMJ"]:
-        sections["TMJ"].append(TMJ_NORMAL_WORDING)
+    order_index = {tooth: index for index, tooth in enumerate(ADULT_FDI_ORDER)}
+    for wording, grouped_teeth in grouped_interpretations.items():
+        ordered = sorted(set(grouped_teeth), key=lambda tooth: order_index.get(tooth, 99))
+        sections["Mahkota"].append(sentence(f"Gigi {', '.join(ordered)}: {wording}"))
+    for wording, grouped_teeth in grouped_diagnoses.items():
+        ordered = sorted(set(grouped_teeth), key=lambda tooth: order_index.get(tooth, 99))
+        sections["diagnosis"].append(sentence(f"{wording} pada gigi {', '.join(ordered)}"))
+
+    # A complete adult dentition is enumerated explicitly; normal teeth are not
+    # collapsed into a range so the FDI sequence remains unambiguous.
+    if template_key == "adult":
+        for tooth in ADULT_FDI_ORDER:
+            if tooth not in abnormal_adult_teeth:
+                sections["Mahkota"].append(f"Gigi {tooth}: DBN.")
+
+        def fdi_sort_key(item: str) -> int:
+            match = TOOTH_RE.search(item)
+            return order_index.get(match.group(0), len(ADULT_FDI_ORDER)) if match else len(ADULT_FDI_ORDER)
+
+        sections["Mahkota"].sort(key=fdi_sort_key)
 
     return {key: unique_preserve(value) for key, value in sections.items()}
 
@@ -455,18 +496,13 @@ def build_final_report(stage_1: str, stage_2: str, stage_3: str, template_key: s
     """Generate PHIMA v0.4.0 report sections from confirmed stage inputs and selected template."""
 
     findings = parse_report_findings(stage_1, stage_2, stage_3, template_key)
-    diagnosis_text = join_bullets(findings["diagnosis"], "Belum terdapat suspek radiodiagnosis spesifik dari shorthand yang dikenali.")
-    suggestion_text = build_suggestions(findings)
-    disclaimer = "Draf interpretasi perlu dikorelasikan dengan pemeriksaan klinis, riwayat pasien, kualitas citra, dan pemeriksaan penunjang lain bila diperlukan."
-
-    diagnosis_label = "Suspek Radiodiagnosis Ringkas" if template_key == "pediatric" else "Suspek Radiodiagnosis"
+    diagnosis_text = join_bullets(findings["diagnosis"], "Tidak ada suspek radiodiagnosis yang diberikan pada input.")
     report = {
-        "Interpretasi Radiografis": build_interpretation_text(findings),
-        diagnosis_label: diagnosis_text,
+        "HASIL INTERPRETASI": build_interpretation_text(findings),
+        "SUSPEK RADIODIAGNOSIS": diagnosis_text,
     }
-    if template_key != "pediatric":
-        report["Saran"] = suggestion_text
-        report["Disclaimer"] = disclaimer
+    if findings["suggestions"]:
+        report["SARAN"] = build_suggestions(findings)
     return report
 
 def format_report_text(report: dict[str, str]) -> str:
